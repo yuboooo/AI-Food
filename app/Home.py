@@ -73,6 +73,9 @@ if __name__ == "__main__":
     # Streamlit app
     st.title("🍎 Food AI")
 
+    # Initialize empty sidebar
+    st.sidebar.empty()
+
     st.markdown("Analyze your food and get detailed nutritional insights! 🎉")
     st.header("📸 Upload a Food Image")
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
