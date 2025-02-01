@@ -15,6 +15,30 @@ from PIL import Image
 import os
 import pandas as pd
 from preprocess import upload_image
+import streamlit as st
+import streamlit_authenticator as stauth
+from streamlit_google_auth import Authenticate
+
+authenticator = Authenticate(
+    secret_credentials_path='./.streamlit/google_credentials.json',
+    cookie_name='my_cookie_name',
+    cookie_key='this_is_secret',
+    redirect_uri='http://localhost:5173',
+)
+
+authenticator.check_authentification()
+
+# Create the login button
+authenticator.login()
+
+if st.session_state['connected']:
+    st.image(st.session_state['user_info'].get('picture'))
+    st.write('Hello, '+ st.session_state['user_info'].get('name'))
+    st.write('Your email is '+ st.session_state['user_info'].get('email'))
+    if st.button('Log out'):
+        authenticator.logout()
+else:
+    st.write("Please log in to continue.")
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
