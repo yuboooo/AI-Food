@@ -1,0 +1,170 @@
+# __import__('pysqlite3')
+# import sys
+# import pysqlite3
+# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
+from preprocess import encode_image
+from agents import agent1_food_image_caption, agent2_nutrition_augmentation
+import chromadb
+import chromadb.config
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+import streamlit as st
+import boto3
+from PIL import Image
+import os
+import pandas as pd
+from preprocess import upload_image
+
+OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
+# def get_db_json():
+#     return Chroma(
+#         collection_name="food_items_collection",
+#         embedding_function=OpenAIEmbeddings(model="text-embedding-3-large"),
+#         persist_directory="../data/food_db/vector_db_json"
+#     )
+
+def download_s3_bucket(bucket_name, local_dir):
+    # Create an S3 client
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"],
+        region_name=st.secrets["aws"]["AWS_DEFAULT_REGION"]
+    )
+
+    paginator = s3.get_paginator('list_objects_v2')
+    operation_parameters = {'Bucket': bucket_name}
+    
+    for page in paginator.paginate(**operation_parameters):
+        if 'Contents' in page:
+            for obj in page['Contents']:
+                key = obj['Key']
+                local_file_path = os.path.join(local_dir, key)
+
+                # Create local directory structure if it doesn't exist
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+
+                # Download the file
+                print(f"Downloading {key} to {local_file_path}")
+                s3.download_file(bucket_name, key, local_file_path)
+
+# Function to load Chroma database
+def get_db_json():
+    # Define S3 and local paths
+    bucket_name = "food-ai-db" 
+    local_dir = "../data/food_db_cloud/" 
+
+    # Call the function
+    download_s3_bucket(bucket_name, local_dir)
+
+    db_path = os.path.join(local_dir, "vector_db_json")
+
+    # Load the Chroma database
+    return Chroma(
+        collection_name="food_items_collection",
+        embedding_function=OpenAIEmbeddings(model="text-embedding-3-large", api_key=st.secrets["general"]["OPENAI_API_KEY"]),
+        persist_directory=db_path
+    )
+
+
+if __name__ == "__main__":
+
+    # Streamlit app
+    st.title("🍎 Food AI")
+
+    st.markdown("Analyze your food and get detailed nutritional insights! 🎉")
+    st.header("📸 Upload a Food Image")
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+
+    if uploaded_file is None:
+        st.info("Please upload a JPG, PNG, or JPEG image of your food to get started!")
+    else:
+        image = Image.open(uploaded_file)
+        upload_image(uploaded_file)
+        st.image(image, caption="Uploaded Food Image", use_container_width=True)
+
+        # Encode image and extract ingredients
+        with st.spinner("Processing image to extract food ingredients..."):
+            encoded_image = encode_image(uploaded_file)
+            ingredients = agent1_food_image_caption(encoded_image)
+
+        if ingredients[0] == 'False':
+            st.error("Sorry, we couldn't identify the food in the image. Please try again with a clearer image.")
+            st.stop()
+
+        st.subheader("🍴 Extracted Food Ingredients")
+        st.write(ingredients)
+
+        with st.spinner("Fetching nutrition information for ingredients..."):
+            # Get the database
+            db = get_db_json()
+
+
+            # Retrieve nutrition info for each ingredient
+            nutrition_info = {}
+            display_info = {}
+            for ingredient in ingredients:
+                similar_doc = db.similarity_search(ingredient, k=1)
+                food_description = similar_doc[0].page_content if similar_doc else None
+                metadata = similar_doc[0].metadata
+                display_info[ingredient] = metadata
+                nutrition_info[food_description] = metadata  # Use ingredient as the key
+
+        # Prepare a cleaner table
+        st.subheader("🍽️ Nutrition Facts for Each Ingredient (per 100g)")
+
+        # Convert nutrition info to a DataFrame for better display
+        nutrition_df = pd.DataFrame.from_dict(display_info, orient='index').reset_index()
+        nutrition_df.columns = ["Ingredient", "Carbohydrate (g)", "Energy (kcal)", "Protein (g)", "Fat (g)"]
+
+        # Customize the DataFrame for a better display
+        nutrition_df["Carbohydrate (g)"] = nutrition_df["Carbohydrate (g)"].apply(lambda x: x.split()[0])
+        nutrition_df["Protein (g)"] = nutrition_df["Protein (g)"].apply(lambda x: x.split()[0])
+        nutrition_df["Fat (g)"] = nutrition_df["Fat (g)"].apply(lambda x: x.split()[0])
+        nutrition_df["Energy (kcal)"] = nutrition_df["Energy (kcal)"].apply(lambda x: x.split()[0])
+
+        # Display as a pretty table in Streamlit
+        st.table(nutrition_df)
+
+
+        # # Augmented nutrition data
+        # st.write("Generating augmented nutrition information...")
+        # nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info)
+        # st.subheader("Augmented Nutrition Information")
+        # st.write(nutrition_augmentation)
+
+
+        # Augmented Nutrition Data
+        st.subheader("🌟 Augmented Nutrition Information")
+        st.markdown("""
+        Here, we enhance the basic nutrition facts with additional insights, 
+        combining data and analysis to provide you with a richer understanding of your food choices.
+        """)
+
+        # Generate augmented nutrition information
+        with st.spinner("Generating augmented nutrition information..."):
+            nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info, ingredients)
+
+        # Display the augmented information with better formatting
+        st.markdown(f"""{nutrition_augmentation}""")
+
+
+
+
+        # Add explanation and citation
+        st.subheader("📚 Source Information")
+        st.markdown("""
+        The nutritional facts displayed above are sourced from the **USDA SRLegacy Database**. 
+        Our system identifies the most similar food descriptions in the database based on the ingredients we identified. 
+        While we strive to make the matches as accurate as possible, they might not always perfectly reflect the exact nutrition of your specific ingredient.
+        We are working to improve our data and algorithms in future versions.
+
+        Below are the matched descriptions from the USDA SRLegacy Database for your reference:
+        """)
+
+        # Display matched descriptions and source citation
+
+        with st.expander("View USDA Food Central Data Sources"):
+            for ingredient, description in nutrition_info.items():
+                st.write(f"- **{ingredient}**:  {description}.")
