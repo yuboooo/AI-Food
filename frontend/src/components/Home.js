@@ -17,6 +17,9 @@ function Home() {
           <button className="nav-button" onClick={() => navigate('/test')}>
             Take a Test
           </button>
+          <button className="nav-button" onClick={() => navigate('/main')}>
+            Go to Main
+          </button>
         </div>
       </div>
     </div>
