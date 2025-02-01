@@ -20,7 +20,7 @@ import streamlit_authenticator as stauth
 from streamlit_google_auth import Authenticate
 
 authenticator = Authenticate(
-    secret_credentials_path='google_credentials.json',
+    secret_credentials_path='./.streamlit/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
     redirect_uri='http://localhost:5173',
