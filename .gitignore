@@ -1,5 +1,5 @@
 __pycache__/
 .*
 backend/data/*
-demo/data/food_db/*
-demo/data/food_db_cloud/*
+data/food_db/*
+data/food_db_cloud/*
