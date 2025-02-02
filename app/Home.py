@@ -36,32 +36,6 @@ authenticator = Authenticate(
     redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
 )
 
-# Add detailed debugging for authentication
-try:
-    # Check if credentials file exists
-    if not os.path.exists('app/google_credentials.json'):
-        st.error("Google credentials file not found at 'app/google_credentials.json'")
-        st.stop()
-    
-    # Print authentication attempt
-    st.write("Attempting authentication...")
-    
-    auth_status = authenticator.check_authentification()
-    
-    if auth_status:
-        st.success("Authentication successful!")
-        st.write(f"Logged in as: {authenticator.get_email()}")
-    else:
-        st.warning("Authentication failed. Please check your credentials.")
-        st.warning("Sorry, we are still debuging the deployment issues, try again later~ thank you for your understanding!")
-        
-
-except FileNotFoundError as e:
-    st.error(f"Credentials file error: {str(e)}")
-    st.info("Please ensure your google_credentials.json file is in the correct location")
-except Exception as e:
-    st.error(f"Authentication error: {str(e)}")
-    st.info("Please verify your Google Cloud configuration and credentials.")
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
