@@ -110,14 +110,14 @@ if st.session_state.active_popup == "pending_requests":
                 with col1:
                     st.write(f"Friend request from: {requester}")
                 with col2:
-                    if st.button("Approve", key=f"approve_{requester}"):
+                    if st.button("✅", key=f"approve_{requester}"):
                         with MongoDB() as mongo:
                             result = mongo.approve_friend_request(user_email, requester)
                             st.success(result["message"])
                             st.session_state.active_popup = None  # Close modal
                             st.rerun()
                 with col3:
-                    if st.button("Decline", key=f"decline_{requester}"):
+                    if st.button("❌", key=f"decline_{requester}"):
                         with MongoDB() as mongo:
                             result = mongo.decline_friend_request(user_email, requester)
                             st.info(result["message"])
