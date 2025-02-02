@@ -23,7 +23,7 @@ from mongodb import MongoDB
 import datetime
 
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 from google.auth.transport.requests import Request
 import pickle
 import os.path
@@ -35,7 +35,7 @@ from user import show_user_profile
 
 
 authenticator = Authenticate(
-    credentials={
+    client_config={
         "web": {
             "client_id": st.secrets["google_credentials"]["web"]["client_id"],
             "project_id": st.secrets["google_credentials"]["web"]["project_id"],
@@ -46,9 +46,8 @@ authenticator = Authenticate(
             "redirect_uris": st.secrets["google_credentials"]["web"]["redirect_uris"]
         }
     },
-    cookie_name='my_cookie_name',
-    cookie_key='this_is_secret',
-    redirect_uri='https://food-ai.streamlit.app/',
+    login_button_text="Login with Google",
+    logout_button_text="Logout",
 )
 
 
@@ -156,15 +155,12 @@ def get_source_information():
     Below are the matched descriptions from the USDA SRLegacy Database for your reference:
     """
 
-# Define the OAuth 2.0 scopes
+# Update the SCOPES if needed
 SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 
           'https://www.googleapis.com/auth/userinfo.email']
 
 def google_auth():
     """Handle Google Authentication"""
-    creds = None
-    
-    # Get credentials from Streamlit secrets and ensure it's a regular dict
     credentials_dict = {
         "web": {
             "client_id": st.secrets["google_credentials"]["web"]["client_id"],
@@ -173,32 +169,17 @@ def google_auth():
             "token_uri": st.secrets["google_credentials"]["web"]["token_uri"],
             "auth_provider_x509_cert_url": st.secrets["google_credentials"]["web"]["auth_provider_x509_cert_url"],
             "client_secret": st.secrets["google_credentials"]["web"]["client_secret"],
-            "redirect_uris": st.secrets["google_credentials"]["web"]["redirect_uris"]
+            "redirect_uris": ["https://food-ai.streamlit.app/_stcore/oauth2-redirect"]
         }
     }
     
-    # If credentials are not valid or don't exist, let user login
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            # Create a temporary credentials file
-            with open('temp_credentials.json', 'w') as f:
-                json.dump(credentials_dict, f)
-            
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'temp_credentials.json',
-                SCOPES,
-                redirect_uri='https://food-ai.streamlit.app/'
-            )
-            creds = flow.run_local_server(
-                prompt='consent'
-            )
-            
-            # Clean up temporary file
-            os.remove('temp_credentials.json')
+    flow = Flow.from_client_config(
+        credentials_dict,
+        scopes=SCOPES,
+        redirect_uri="https://food-ai.streamlit.app/_stcore/oauth2-redirect"
+    )
     
-    return creds
+    return flow
 
 # Initialize authentication state
 if 'authenticated' not in st.session_state:
@@ -207,9 +188,9 @@ if 'authenticated' not in st.session_state:
 if not st.session_state.authenticated:
     if st.button('Login with Google'):
         try:
-            creds = google_auth()
+            flow = google_auth()
             st.session_state.authenticated = True
-            st.session_state.credentials = creds
+            st.session_state.credentials = flow
             st.success('Successfully logged in!')
         except Exception as e:
             st.error(f'Authentication failed: {str(e)}')
