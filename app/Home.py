@@ -21,36 +21,41 @@ import streamlit_authenticator as stauth
 from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
+from utils.session_manager import verify_session, get_authenticator
 
-authenticator = Authenticate(
-    secret_credentials_path='./.streamlit/google_credentials.json',
-    cookie_name='my_cookie_name',
-    cookie_key='this_is_secret',
-    redirect_uri='http://localhost:5173',
-)
+# Get the authenticator
+authenticator = get_authenticator()
 
-authenticator.check_authentification()
-
-# Create the login button
-authenticator.login()
-
-if st.session_state['connected']:
-    st.image(st.session_state['user_info'].get('picture'))
-    st.write('Hello, ' + st.session_state['user_info'].get('name'))
-    st.write('Your email is ' + st.session_state['user_info'].get('email'))
-    
-    # Save the user information in session_state["user"]
-    st.session_state["user"] = {
-        "email": st.session_state['user_info'].get('email'),
-        "name": st.session_state['user_info'].get('name'),
-        "picture": st.session_state['user_info'].get('picture')
-    }
-    
-    if st.button('Log out'):
-        authenticator.logout()
-else:
+# Check for existing session first
+if not verify_session():
+    # Create the login button only if not authenticated
+    authenticator.login()
     st.write("Please log in to continue.")
+    st.stop()
 
+# User is authenticated
+st.image(st.session_state['user_info'].get('picture'))
+st.write('Hello, ' + st.session_state['user_info'].get('name'))
+st.write('Your email is ' + st.session_state['user_info'].get('email'))
+
+# Save user info and create/update session
+with MongoDB() as mongo:
+    user_data = mongo.create_or_get_user(st.session_state['user_info'])
+    # Set session token in URL parameters
+    st.query_params['session_token'] = user_data['session_token']
+
+if st.button('Log out'):
+    # Clear session in database
+    with MongoDB() as mongo:
+        mongo.invalidate_session(st.session_state['user_info'].get('email'))
+    # Clear URL parameters
+    st.query_params.clear()
+    # Clear session state
+    for key in ['connected', 'user_info', 'user']:
+        if key in st.session_state:
+            del st.session_state[key]
+    authenticator.logout()
+    st.experimental_rerun()
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():

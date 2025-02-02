@@ -1,8 +1,10 @@
 # mongodb.py
 from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
+import secrets
 
 class MongoDB:
     def __init__(self):
@@ -67,21 +69,64 @@ class MongoDB:
 
     def create_or_get_user(self, google_user):
         """Create a new user or get existing user after Google authentication"""
-        user = self.users.find_one({"email": google_user["email"]})
-        
-        if not user:
-            user_data = {
-                "email": google_user["email"],
-                "name": google_user["name"],
-                "picture": google_user.get("picture", ""),
-                "created_at": datetime.now(),
-                "food_history": [],
-                "friend_list": []  # Initialize empty friend list as list of dicts
-            }
-            self.users.insert_one(user_data)
-            return user_data
-        
+        try:
+            user = self.users.find_one({"email": google_user["email"]})
+            
+            if not user:
+                # Generate a session token
+                session_token = secrets.token_urlsafe(32)
+                user_data = {
+                    "email": google_user["email"],
+                    "name": google_user["name"],
+                    "picture": google_user.get("picture", ""),
+                    "created_at": datetime.now(),
+                    "food_history": [],
+                    "friend_list": [],
+                    "session_token": session_token,
+                    "session_expiry": datetime.now() + timedelta(days=30)
+                }
+                self.users.insert_one(user_data)
+                return user_data
+            
+            # Update existing user's session
+            session_token = secrets.token_urlsafe(32)
+            self.users.update_one(
+                {"email": google_user["email"]},
+                {
+                    "$set": {
+                        "session_token": session_token,
+                        "session_expiry": datetime.now() + timedelta(days=30)
+                    }
+                }
+            )
+            user["session_token"] = session_token
+            return user
+            
+        except Exception as e:
+            raise ConnectionFailure(f"Failed to create or get user: {e}")
+
+    def verify_session(self, session_token):
+        """Verify if a session token is valid and return the user"""
+        if not session_token:
+            return None
+            
+        user = self.users.find_one({
+            "session_token": session_token,
+            "session_expiry": {"$gt": datetime.now()}
+        })
         return user
+
+    def invalidate_session(self, email):
+        """Invalidate a user's session"""
+        self.users.update_one(
+            {"email": email},
+            {
+                "$unset": {
+                    "session_token": "",
+                    "session_expiry": ""
+                }
+            }
+        )
 
     # --- New Friend Ecosystem Methods ---
     def send_friend_request(self, sender_email, target_email):

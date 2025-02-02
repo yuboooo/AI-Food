@@ -1,8 +1,14 @@
 # chat.py
 import streamlit as st
 from mongodb import MongoDB  # Ensure the path is correct
+from utils.session_manager import verify_session
 
 st.title("Chat and Friend Management")
+
+# Verify session before proceeding
+if not verify_session():
+    st.error("Please log in to access this page")
+    st.stop()
 
 # --- Retrieve logged-in user info ---
 if "user" not in st.session_state:
@@ -58,11 +64,16 @@ if confirmed_friends:
         with col1:
             st.write(friend)
         with col2:
-            if st.button("Delete", key=f"delete_{friend}"):
-                with MongoDB() as mongo:
-                    result = mongo.delete_friend(user["email"], friend)
-                    st.write(result["message"])
-                    st.experimental_rerun()
+          # Instead of calling st.experimental_rerun(), update the UI variables manually.
+          if st.button("Delete", key=f"delete_{friend}"):
+              with MongoDB() as mongo:
+                  result = mongo.delete_friend(user["email"], friend)
+                  st.write(result["message"])
+                  # Manually update the confirmed_friends variable
+                  confirmed_friends = mongo.get_friend_list(user["email"])
+                  st.session_state["confirmed_friends"] = confirmed_friends
+                  st.success("Friend deleted! Please refresh the page to see the update.")
+
 else:
     st.info("No confirmed friends yet.")
 
