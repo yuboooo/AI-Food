@@ -17,7 +17,10 @@ import pandas as pd
 from preprocess import upload_image
 import streamlit as st
 import streamlit_authenticator as stauth
+
 from streamlit_google_auth import Authenticate
+from mongodb import MongoDB
+import datetime
 
 authenticator = Authenticate(
     secret_credentials_path='./.streamlit/google_credentials.json',
@@ -91,6 +94,41 @@ def get_db_json():
         persist_directory=db_path
     )
 
+def save_analysis_to_db(email, image_data, ingredients, nutrition_info, nutrition_df, augmented_info):
+    """
+    Save the food analysis results to MongoDB
+    """
+    try:
+        with MongoDB() as mongo:
+            analysis_data = {
+                "date": datetime.datetime.utcnow(),
+                "image": image_data,
+                "ingredients": ingredients,
+                "nutrition_info": nutrition_info,
+                "nutrition_df": nutrition_df.to_dict() if nutrition_df is not None else {},
+                "augmented_info": augmented_info
+            }
+            
+            # Update user document, adding new analysis to food_history
+            result = mongo.users.update_one(
+                {"email": email},
+                {
+                    "$setOnInsert": {
+                        "email": email,
+                        "created_at": datetime.datetime.utcnow()
+                    },
+                    "$push": {
+                        "food_history": analysis_data
+                    }
+                },
+                upsert=True
+            )
+            
+            return True, "Analysis saved successfully!"
+            
+    except Exception as e:
+        st.error(f"Error saving to database: {str(e)}")
+        return False, str(e)
 
 if __name__ == "__main__":
 
@@ -195,3 +233,50 @@ if __name__ == "__main__":
         with st.expander("View USDA Food Central Data Sources"):
             for ingredient, description in nutrition_info.items():
                 st.write(f"- **{ingredient}**:  {description}.")
+
+        if st.session_state.get('connected', False):
+            email = st.session_state['user_info'].get('email')
+            
+            # Add a save button
+            if st.button("Save Analysis"):
+                try:
+                    # Convert uploaded image to bytes for storage
+                    uploaded_file.seek(0)
+                    image_data = uploaded_file.read()
+                    
+                    # Sample data structure for testing
+                    sample_ingredients = [
+                        "chicken breast",
+                        "brown rice",
+                        "broccoli"
+                    ]
+                    
+                    sample_nutrition_info = {
+                        "calories": "450 kcal",
+                        "protein": "35g",
+                        "carbs": "45g",
+                        "fat": "15g"
+                    }
+                    
+                    sample_text_summary = """
+                    This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
+                    The chicken breast provides essential protein, the brown rice offers sustained energy,
+                    and the broccoli adds important vitamins and fiber to the meal.
+                    """
+                    
+                    # Create MongoDB instance and save
+                    mongo = MongoDB()
+                    mongo.save_analysis(
+                        email=email,
+                        image_data=image_data,
+                        ingredients=sample_ingredients,
+                        final_nutrition_info=sample_nutrition_info,
+                        text_summary=sample_text_summary
+                    )
+                    
+                    st.success("Analysis saved successfully!")
+                    
+                except Exception as e:
+                    st.error(f"Error saving to database: {str(e)}")
+        else:
+            st.warning("Please log in to save your analysis.")
