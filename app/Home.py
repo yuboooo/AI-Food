@@ -21,29 +21,19 @@ import streamlit_authenticator as stauth
 from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
-import logging
 
 from user import show_user_profile
 
-# Add this near the top of your file
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+
 
 authenticator = Authenticate(
     secret_credentials_path='app/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
-    redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app',
+    redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
 )
 
-# Add logging before and after authentication
-logger.debug("Attempting authentication...")
-try:
-    authenticator.check_authentification()
-    logger.debug("Authentication successful")
-except Exception as e:
-    logger.error(f"Authentication failed: {str(e)}")
-    st.error("Authentication failed. Please try again.")
+authenticator.check_authentification()
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
