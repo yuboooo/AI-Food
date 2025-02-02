@@ -2,11 +2,16 @@ import streamlit as st
 from mongodb import MongoDB
 from streamlit_google_auth import Authenticate
 
+google_credentials = {
+    "web": st.secrets["google_oauth"]
+}
+
+
 def get_authenticator():
     """Get or create the authenticator instance"""
     if 'authenticator' not in st.session_state:
         st.session_state.authenticator = Authenticate(
-            secret_credentials_path='app/google_credentials.json',
+            secret_credentials_path=google_credentials,
             cookie_name='my_cookie_name',
             cookie_key='this_is_secret',
             redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
