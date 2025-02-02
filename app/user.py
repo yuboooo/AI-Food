@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 def show_user_profile(authenticator):
     """Display user profile in the sidebar"""
@@ -9,12 +10,12 @@ def show_user_profile(authenticator):
         # Profile container at the bottom
         with st.container():
             st.markdown("### User Profile")
-            if st.session_state['connected']:
-                st.image(st.session_state['user_info'].get('picture'), width=100)
-                st.write('Hello, '+ st.session_state['user_info'].get('name'))
-                st.write('Email: '+ st.session_state['user_info'].get('email'))
+            # Update the path to point to the app directory
+            credentials_path = os.path.join('app', 'google_credentials.json')
+            
+            if 'name' in st.session_state:
                 if st.button('Log out'):
                     authenticator.logout()
             else:
-                authenticator.login()
+                authenticator.login(credentials_path)  # Pass the credentials path
                 st.write("Please log in to continue.")
