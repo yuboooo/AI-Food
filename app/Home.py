@@ -1,7 +1,7 @@
-# __import__('pysqlite3')
-# import sys
-# import pysqlite3
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+__import__('pysqlite3')
+import sys
+import pysqlite3
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 from preprocess import encode_image
 from agents import agent1_food_image_caption, agent2_nutrition_augmentation, agent3_parse_nutrition, agent4_create_summary
@@ -27,13 +27,12 @@ from user import show_user_profile
 
 
 authenticator = Authenticate(
-    secret_credentials_path='./.streamlit/google_credentials.json',
+    secret_credentials_path='app/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
-    redirect_uri='http://localhost:8501',
+    redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
 )
 
-authenticator.check_authentification()
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
