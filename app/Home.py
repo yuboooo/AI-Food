@@ -4,7 +4,7 @@
 # sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 from preprocess import encode_image
-from agents import agent1_food_image_caption, agent2_nutrition_augmentation, agent3_parse_nutrition
+from agents import agent1_food_image_caption, agent2_nutrition_augmentation, agent3_parse_nutrition, agent4_create_summary
 import chromadb
 import chromadb.config
 from langchain_chroma import Chroma
@@ -256,6 +256,7 @@ if __name__ == "__main__":
                     }
 
                     final_nutrition_info = agent3_parse_nutrition(nutrition_augmentation)
+                    text_summary = agent4_create_summary(nutrition_augmentation)
                     
                     sample_text_summary = """
                     This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
@@ -270,7 +271,7 @@ if __name__ == "__main__":
                         image_data=image_data,
                         ingredients=ingredients,
                         final_nutrition_info=final_nutrition_info,
-                        text_summary=sample_text_summary
+                        text_summary=text_summary
                     )
                     
                     st.success("Analysis saved successfully!")

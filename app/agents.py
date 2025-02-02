@@ -2,6 +2,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 import streamlit as st
+import json
 
 load_dotenv()
 api_key = st.secrets["general"]["OPENAI_API_KEY"]
@@ -95,10 +96,12 @@ def agent2_nutrition_augmentation(encoded_image: str, nutrition_info: dict, ingr
 
             Nutritional Calculation
 
-            Use provided USDA data when relevant
+            Use provided USDA data when relevant, dont over over estimate the nutrition info, if the USDA data is inaccurate, and dont over rely on the USDA data. 
             Apply your nutrition knowledge for any ingredients without provided data
             Consider cooking methods that might affect nutritional content
             Provide calculations based on estimated weights
+
+            Note: If provided nutrition facts are irrelevant or inaccurate for the visible food item, rely on your nutrition knowledge database for more accurate estimations, do not over estimate the nutrition info.
 
 
 
@@ -144,7 +147,7 @@ def agent2_nutrition_augmentation(encoded_image: str, nutrition_info: dict, ingr
             Write in a friendly, informative tone
             The title of each section should be similar to h3 size
 
-            Note: If provided nutrition facts seem irrelevant or inaccurate for the visible food item, rely on your nutrition knowledge database for more accurate estimations.
+            Note: If provided nutrition facts seem irrelevant or inaccurate for the visible food item, rely on your nutrition knowledge database for more accurate estimations, do not over estimate the nutrition info.
 
             """
 
@@ -172,26 +175,88 @@ def agent2_nutrition_augmentation(encoded_image: str, nutrition_info: dict, ingr
 def agent3_parse_nutrition(agent2_response: str) -> list:
     """
     Parse the nutrition summary table from agent2's response and return it as a structured list.
-    The function looks for the Summary section and extracts the numerical ranges.
-    Returns a list format that's MongoDB-friendly.
     """
     client = OpenAI(api_key=api_key)
     
     prompt = """
-    Find the Summary section in the text that contains the nutrition table.
-    Extract ONLY the numerical ranges for Energy, Protein, Fat, and Carbohydrates.
-    Format the output as a list of dictionaries with this exact structure:
-    [
-        {"nutrient": "energy", "min": X, "max": Y},
-        {"nutrient": "protein", "min": X, "max": Y},
-        {"nutrient": "fat", "min": X, "max": Y},
-        {"nutrient": "carbs", "min": X, "max": Y}
-    ]
-    Where X and Y are numerical values (floats) without units.
-    Example input table row: "Energy (kcal) 785 - 925"
-    Should output: {"nutrient": "energy", "min": 785.0, "max": 925.0}
+    Extract the numerical ranges from the Summary section's nutrition table and convert them to a JSON format.
     
-    Return only the list of dictionaries, nothing else.
+    Example input text:
+    Summary
+    Nutrient	Total Estimated Values (±10%)
+    Energy	493 - 611 kcal
+    Protein	32 - 39g
+    Fat	25 - 32g
+    Carbohydrates	31 - 42g
+
+    Expected output format:
+    {
+        "data": [
+            {"nutrient": "energy", "min": 493, "max": 611},
+            {"nutrient": "protein", "min": 32, "max": 39},
+            {"nutrient": "fat", "min": 25, "max": 32},
+            {"nutrient": "carbs", "min": 31, "max": 42}
+        ]
+    }
+
+    Important:
+    - Extract only the numerical values
+    - Remove all units (kcal, g)
+    - Return a valid JSON object with the exact structure shown above
+    - Convert all numbers to floats
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{prompt}\n\nText to parse:\n{agent2_response}"
+                }
+            ],
+            max_tokens=300,
+            response_format={ "type": "json_object" }
+        )
+        
+        # Print raw response for debugging
+        print("\nRaw GPT Response:")
+        print(response.choices[0].message.content.strip())
+        
+        # Parse the JSON response
+        parsed_response = json.loads(response.choices[0].message.content.strip())
+        nutrition_list = parsed_response.get('data', [])
+        
+        print("\nAgent3 Output:")
+        print(json.dumps(nutrition_list, indent=2))
+        
+        return nutrition_list
+        
+    except Exception as e:
+        raise Exception(f"Error parsing nutrition information: {str(e)}")
+
+def agent4_create_summary(agent2_response: str) -> str:
+    """
+    Create a concise, informative summary of the nutritional analysis from agent2's response.
+    Returns a brief, professional summary focusing on key nutritional aspects.
+    """
+    client = OpenAI(api_key=api_key)
+    
+    prompt = """
+    As a professional nutritionist, create a brief, informative summary of this meal's nutritional analysis.
+    
+    Guidelines:
+    1. Start with a one-sentence overview of the dish and its main components
+    2. Highlight the key macronutrient distribution (protein, carbs, fat ratio)
+    3. Mention any notable nutritional characteristics (e.g., protein-rich, balanced meal, etc.)
+    4. Keep the tone professional but conversational
+    5. Be concise - aim for 3-4 sentences total
+    
+    Format the response in plain text without special formatting or bullet points.
+    Focus on facts rather than recommendations.
+    
+    Example style:
+    "This sushi roll combines salmon and rice for a balanced meal providing 400-450 calories. The macronutrient distribution is well-balanced with 40% carbs, 30% protein, and 30% healthy fats. This meal offers a good source of omega-3 fatty acids and complete protein."
     """
 
     try:
@@ -200,16 +265,14 @@ def agent3_parse_nutrition(agent2_response: str) -> list:
             messages=[
                 {
                     "role": "user",
-                    "content": f"{prompt}\n\nText to parse:\n{agent2_response}"
+                    "content": f"{prompt}\n\nNutritional analysis to summarize:\n{agent2_response}"
                 }
             ],
-            max_tokens=300
+            max_tokens=200
         )
         
-        # Convert the string representation to a Python list
-        import json
-        nutrition_list = json.loads(response.choices[0].message.content.strip())
-        return nutrition_list
+        summary = response.choices[0].message.content.strip()
+        return summary
         
     except Exception as e:
-        raise Exception(f"Error parsing nutrition information: {str(e)}")
+        raise Exception(f"Error creating nutritional summary: {str(e)}")
