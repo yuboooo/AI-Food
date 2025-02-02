@@ -40,7 +40,7 @@ with MongoDB() as mongo:
 
 
 # ---- Right Section (Friend Management) ----
-st.header("👥 Friends")
+# st.header("👥 Friends")
 
 # Initialize session states for popups
 if "show_add_friend" not in st.session_state:
@@ -49,26 +49,34 @@ if "show_pending_requests" not in st.session_state:
     st.session_state.show_pending_requests = False
 if "show_confirmed_friends" not in st.session_state:
     st.session_state.show_confirmed_friends = False
+if "active_popup" not in st.session_state:
+    st.session_state.active_popup = None  # Track which popup is open
 
 # ---- Friend Management Buttons ----
 col1, col2, col3 = st.columns([3, 3, 3])
 
+def close_other_popups(open_popup):
+    """Closes all other popups when opening a new one"""
+    if st.session_state.active_popup != open_popup:
+        st.session_state.active_popup = open_popup
+        st.rerun()  # Ensure UI updates
+
 with col1:
     if st.button("➕ Add Friend"):
-        st.session_state.show_add_friend = True
+        close_other_popups("add_friend")
 
 # Only show Pending Requests button if there are pending requests
 if pending_requests:
     with col2:
         if st.button(f"⏳ Pending Requests ({len(pending_requests)})"):
-            st.session_state.show_pending_requests = True
+            close_other_popups("pending_requests")
 
 with col3:
-    if st.button("Confirmed Friends"):
-        st.session_state.show_confirmed_friends = True
+    if st.button("✅ Confirmed Friends"):
+        close_other_popups("confirmed_friends")
 
 # ---- Mini Popups ----
-if st.session_state.show_add_friend:
+if st.session_state.active_popup == "add_friend":
     with st.sidebar:
         st.markdown("### ➕ Add a Friend")
         new_friend_email = st.text_input("Enter friend's email:", key="add_friend_email")
@@ -77,15 +85,15 @@ if st.session_state.show_add_friend:
                 with MongoDB() as mongo:
                     result = mongo.send_friend_request(user_email, new_friend_email)
                     st.success(result["message"])
-                    st.session_state.show_add_friend = False  # Close modal
+                    st.session_state.active_popup = None  # Close modal
                     st.rerun()
             else:
                 st.warning("Please enter a valid email.")
         if st.button("Close"):
-            st.session_state.show_add_friend = False
+            st.session_state.active_popup = None
             st.rerun()
 
-if st.session_state.show_pending_requests:
+if st.session_state.active_popup == "pending_requests":
     with st.sidebar:
         st.markdown("### ⏳ Pending Friend Requests")
         with MongoDB() as mongo:
@@ -101,23 +109,23 @@ if st.session_state.show_pending_requests:
                         with MongoDB() as mongo:
                             result = mongo.approve_friend_request(user_email, requester)
                             st.success(result["message"])
-                            st.session_state.show_pending_requests = False  # Close modal
+                            st.session_state.active_popup = None  # Close modal
                             st.rerun()
                 with col3:
                     if st.button("Decline", key=f"decline_{requester}"):
                         with MongoDB() as mongo:
                             result = mongo.decline_friend_request(user_email, requester)
                             st.info(result["message"])
-                            st.session_state.show_pending_requests = False  # Close modal
+                            st.session_state.active_popup = None  # Close modal
                             st.rerun()
         else:
             st.info("No pending requests.")
         
         if st.button("Close"):
-            st.session_state.show_pending_requests = False
+            st.session_state.active_popup = None
             st.rerun()
 
-if st.session_state.show_confirmed_friends:
+if st.session_state.active_popup == "confirmed_friends":
     with st.sidebar:
         st.markdown("### Confirmed Friends")
         with MongoDB() as mongo:
@@ -129,19 +137,18 @@ if st.session_state.show_confirmed_friends:
                 with col1:
                     st.write(friend)
                 with col2:
-                    if st.button("Remove", key=f"delete_{friend}"):
+                    if st.button("🗑️ Remove", key=f"delete_{friend}"):
                         with MongoDB() as mongo:
                             result = mongo.delete_friend(user_email, friend)
                             st.success(result["message"])
-                            st.session_state.show_confirmed_friends = False  # Close modal
+                            st.session_state.active_popup = None  # Close modal
                             st.rerun()
         else:
             st.info("No confirmed friends yet.")
 
         if st.button("Close"):
-            st.session_state.show_confirmed_friends = False
+            st.session_state.active_popup = None
             st.rerun()
-
 
 # Leaderboard
 
@@ -154,14 +161,14 @@ leaderboard = [
 leaderboard = sorted(leaderboard, key=lambda x: x["food_history_size"], reverse=True)
 
 # Leaderboard Display in Table Format
-st.header("🥇 Rankings")
+st.header("Rankings")
 
 # Emoji medals for top 3 players
 medals = ["🏆", "🥈", "🥉"]
 
 # Display leaderboard
 for idx, entry in enumerate(leaderboard):
-    col1, col2, col3, col4 = st.columns([1, 3, 2, 1])
+    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
 
     # Medal for top 3 players
     with col1:
