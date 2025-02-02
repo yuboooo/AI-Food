@@ -18,7 +18,6 @@ from preprocess import upload_image
 import streamlit as st
 import streamlit_authenticator as stauth
 
-from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
 
@@ -32,23 +31,6 @@ import json
 
 from user import show_user_profile
 
-
-
-authenticator = Authenticate(
-    client_config={
-        "web": {
-            "client_id": st.secrets["google_credentials"]["web"]["client_id"],
-            "project_id": st.secrets["google_credentials"]["web"]["project_id"],
-            "auth_uri": st.secrets["google_credentials"]["web"]["auth_uri"],
-            "token_uri": st.secrets["google_credentials"]["web"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["google_credentials"]["web"]["auth_provider_x509_cert_url"],
-            "client_secret": st.secrets["google_credentials"]["web"]["client_secret"],
-            "redirect_uris": st.secrets["google_credentials"]["web"]["redirect_uris"]
-        }
-    },
-    login_button_text="Login with Google",
-    logout_button_text="Logout",
-)
 
 
 # Display user profile in sidebar
