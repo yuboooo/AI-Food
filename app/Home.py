@@ -50,6 +50,7 @@ try:
         st.write(f"Logged in as: {authenticator.get_email()}")
     else:
         st.warning("Authentication failed. Please check your credentials.")
+        st.warning("Sorry, we are still debuging the deployment issues, try again later~ thank you for your understanding!")
         st.info("Make sure you have:")
         st.markdown("""
         1. Valid Google Cloud credentials
