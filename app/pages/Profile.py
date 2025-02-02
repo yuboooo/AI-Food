@@ -17,20 +17,63 @@ authenticator = get_authenticator()
 def show_profile():
     st.title("Nutrition Profile Dashboard")
     show_user_profile(authenticator)
-    # Assuming we have a user's nutrition history stored in a database
-    # For now, let's create sample data
-    @st.cache_data
+
     def load_user_nutrition_history():
-        # This should be replaced with actual database queries
-        dates = pd.date_range(end=datetime.now(), periods=30).tolist()
-        sample_data = {
-            'date': dates,
-            'calories': [random.randint(1500, 2500) for _ in range(30)],
-            'protein': [random.randint(40, 100) for _ in range(30)],
-            'carbs': [random.randint(150, 300) for _ in range(30)],
-            'fat': [random.randint(30, 80) for _ in range(30)]
-        }
-        return pd.DataFrame(sample_data)
+        try:
+            mongo = MongoDB()
+            # Force a new MongoDB connection each time
+            mongo.client.server_info()  # Test connection
+            user_data = mongo.users.find_one({"email": st.session_state['user_info'].get('email')})
+            food_history = user_data.get('food_history', []) if user_data else []
+            
+            # Add debug info
+            # st.write(f"Loading data at: {datetime.now()}")
+            # st.write(f"Number of food history entries: {len(food_history)}")
+            
+            # Process food history into daily totals
+            daily_totals = {}
+            for entry in food_history:
+                date = entry['date']
+                if isinstance(date, datetime):
+                    date_key = date.date()
+                else:
+                    date_key = datetime.fromisoformat(date).date()
+                
+                nutrition_info = entry.get('final_nutrition_info', [])
+                if not daily_totals.get(date_key):
+                    daily_totals[date_key] = {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0}
+                
+                # Handle both list and dict formats of nutrition_info
+                if isinstance(nutrition_info, list):
+                    for item in nutrition_info:
+                        nutrient = item.get('nutrient')
+                        # Use average of min and max values
+                        value = (float(str(item.get('min', 0)).replace(',', '')) + 
+                                float(str(item.get('max', 0)).replace(',', ''))) / 2
+                        if nutrient == 'energy':
+                            daily_totals[date_key]['calories'] += value
+                        elif nutrient in ['protein', 'carbs', 'fat']:
+                            daily_totals[date_key][nutrient] += value
+                elif isinstance(nutrition_info, dict):
+                    daily_totals[date_key]['calories'] += float(str(nutrition_info.get('energy', 0)).replace(',', ''))
+                    daily_totals[date_key]['protein'] += float(str(nutrition_info.get('protein', 0)).replace(',', ''))
+                    daily_totals[date_key]['carbs'] += float(str(nutrition_info.get('carbs', 0)).replace(',', ''))
+                    daily_totals[date_key]['fat'] += float(str(nutrition_info.get('fat', 0)).replace(',', ''))
+            
+            # Convert to DataFrame
+            df_data = {
+                'date': list(daily_totals.keys()),
+                'calories': [totals['calories'] for totals in daily_totals.values()],
+                'protein': [totals['protein'] for totals in daily_totals.values()],
+                'carbs': [totals['carbs'] for totals in daily_totals.values()],
+                'fat': [totals['fat'] for totals in daily_totals.values()]
+            }
+            df = pd.DataFrame(df_data)
+            df = df.sort_values('date')
+            return df
+        except Exception as e:
+            st.error(f"Error loading nutrition history: {str(e)}")
+            return pd.DataFrame(columns=['date', 'calories', 'protein', 'carbs', 'fat'])
 
     # Load user data
     user_data = load_user_nutrition_history()
@@ -45,6 +88,8 @@ def show_profile():
                              title='Daily Calorie Intake')
         st.plotly_chart(fig_calories)
 
+        st.markdown("")
+        st.markdown("")
         # Macronutrient distribution
         st.subheader("Macronutrient Distribution")
         fig_macros = go.Figure()
@@ -57,18 +102,35 @@ def show_profile():
     with col2:
         # Summary statistics
         st.subheader("Weekly Summary")
-        recent_data = user_data.tail(7)
+        # Get last 7 non-empty entries instead of last 7 days
+        recent_data = user_data[user_data['calories'] > 0].tail(7)
         
-        avg_calories = recent_data['calories'].mean()
-        avg_protein = recent_data['protein'].mean()
-        avg_carbs = recent_data['carbs'].mean()
-        avg_fat = recent_data['fat'].mean()
+        # Add debug info
+        # st.write(f"Number of recent entries: {len(recent_data)}")
+        # st.write("Recent data:")
+        # st.write(recent_data)
+        
+        if len(recent_data) > 0:
+            avg_calories = recent_data['calories'].mean()
+            avg_protein = recent_data['protein'].mean()
+            avg_carbs = recent_data['carbs'].mean()
+            avg_fat = recent_data['fat'].mean()
+        else:
+            avg_calories = avg_protein = avg_carbs = avg_fat = 0
 
         st.metric("Avg. Daily Calories", f"{avg_calories:.0f} kcal")
         st.metric("Avg. Daily Protein", f"{avg_protein:.1f}g")
         st.metric("Avg. Daily Carbs", f"{avg_carbs:.1f}g")
         st.metric("Avg. Daily Fat", f"{avg_fat:.1f}g")
-
+        # Add a separator line
+        st.markdown("")
+        st.markdown("")
+        st.markdown("")
+        
+        st.markdown("")
+        st.markdown("")
+        st.markdown("")
+        
         # Progress towards goals
         st.subheader("Goals Progress")
         # These should be customizable by user
@@ -161,7 +223,7 @@ def show_profile():
             "initialView": "dayGridMonth",
             "selectable": True,
             "dayMaxEvents": True,
-            "editable": False,
+            "editable": True,
             "events": calendar_events,
             "height": 650,
         }
