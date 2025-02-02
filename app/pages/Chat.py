@@ -44,13 +44,13 @@ if pending_requests:
                 with MongoDB() as mongo:
                     result = mongo.approve_friend_request(user["email"], requester)
                     st.success(result["message"])
-                    st.experimental_rerun()
+                    st.rerun()
         with col3:
             if st.button("Decline", key=f"decline_{requester}"):
                 with MongoDB() as mongo:
                     result = mongo.decline_friend_request(user["email"], requester)
                     st.info(result["message"])
-                    st.experimental_rerun()
+                    st.rerun()
 else:
     st.info("No pending friend requests.")
 
