@@ -2,13 +2,18 @@ import streamlit as st
 from mongodb import MongoDB
 from utils.session_manager import require_auth
 from utils.session_manager import get_authenticator
-
+from user import show_user_profile
 authenticator = get_authenticator()
 
 st.title("Leaderboard 🏆")
 
 # Require authentication for this page
 require_auth()
+
+# authenticator.check_authentification()
+
+# # Display user profile in sidebar
+# show_user_profile(authenticator)
 
 # User is authenticated at this point
 user = st.session_state["user"]
