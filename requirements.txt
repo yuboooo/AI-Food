@@ -205,3 +205,4 @@ zipp==3.21.0
 streamlit-authenticator
 streamlit-google-auth
 streamlit-calendar
+pymongo
