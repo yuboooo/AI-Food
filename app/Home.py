@@ -25,9 +25,12 @@ import datetime
 from user import show_user_profile
 
 
+google_credentials = {
+    "web": st.secrets["google_oauth"]
+}
 
 authenticator = Authenticate(
-    secret_credentials_path='app/google_credentials.json',
+    credentials=google_credentials, 
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
     redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
