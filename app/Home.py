@@ -27,7 +27,7 @@ from user import show_user_profile
 
 
 authenticator = Authenticate(
-    secret_credentials_path='./google_credentials.json',
+    secret_credentials_path='app/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
     redirect_uri='http://localhost:5173',
