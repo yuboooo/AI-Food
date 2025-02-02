@@ -37,21 +37,7 @@ authenticator = Authenticate(
 )
 
 # Add detailed debugging for authentication
-try:
-    auth_status = authenticator.check_authentification()
-    
-    if auth_status:
-        st.success("Authentication successful!")
-        st.write(f"Logged in as: {authenticator.get_email()}")
-    else:
-        st.warning("Unable to authenticate. Please try signing in again.")
-        authenticator.login()
-        st.stop()
 
-except Exception as e:
-    st.error("Authentication error occurred")
-    st.info("We're experiencing some technical difficulties. Please try again later.")
-    st.stop()
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
