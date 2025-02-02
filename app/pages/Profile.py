@@ -7,41 +7,10 @@ import random
 from streamlit_calendar import calendar
 from mongodb import MongoDB
 import json
-from utils.session_manager import require_auth
 
 def show_profile():
-    st.title("User Profile")
-
-    # Require authentication for this page
-    require_auth()
-
-    # User is authenticated at this point
-    user = st.session_state["user"]
+    st.title("Nutrition Profile Dashboard")
     
-    # Display user info
-    st.image(user.get("picture"))
-    st.write(f"Name: {user.get('name')}")
-    st.write(f"Email: {user.get('email')}")
-    
-    # Display user's food history
-    st.header("Food Analysis History")
-    with MongoDB() as mongo:
-        history = mongo.get_user_history(user.get("email"))
-    
-    if history:
-        for entry in history:
-            with st.expander(f"Analysis from {entry['date'].strftime('%Y-%m-%d %H:%M')}"):
-                if "image" in entry:
-                    st.image(entry["image"])
-                if "ingredients" in entry:
-                    st.write("Ingredients:", entry["ingredients"])
-                if "final_nutrition_info" in entry:
-                    st.write("Nutrition Information:", entry["final_nutrition_info"])
-                if "text_summary" in entry:
-                    st.write("Summary:", entry["text_summary"])
-    else:
-        st.info("No food analysis history yet.")
-
     # Assuming we have a user's nutrition history stored in a database
     # For now, let's create sample data
     @st.cache_data
