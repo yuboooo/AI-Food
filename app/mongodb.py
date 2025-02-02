@@ -5,36 +5,39 @@ import base64
 
 class MongoDB:
     def __init__(self):
-        try:
-            # Get connection string from streamlit secrets
-            mongodb_uri = st.secrets["mongodb"]["MONGODB_URI"]
-            
-            # Connection with timeout and proper options
-            self.client = MongoClient(
-                mongodb_uri,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=10000,
-                socketTimeoutMS=None,
-                connect=True
-            )
-            
-            # Test the connection
-            self.client.server_info()
-            
-            self.db = self.client.food_ai_db
-            self.users = self.db.users
-            
-            print("MongoDB connection successful")
-            
-        except Exception as e:
-            print(f"Error connecting to MongoDB: {e}")
-            raise Exception("Failed to connect to MongoDB")
+        # Only create a new connection if one doesn't exist in session state
+        if 'mongodb_client' not in st.session_state:
+            try:
+                # Get connection string from streamlit secrets
+                mongodb_uri = st.secrets["mongodb"]["MONGODB_URI"]
+                
+                # Connection with timeout and proper options
+                st.session_state.mongodb_client = MongoClient(
+                    mongodb_uri,
+                    serverSelectionTimeoutMS=5000,
+                    connectTimeoutMS=10000,
+                    socketTimeoutMS=None,
+                    connect=True
+                )
+                
+                # Test the connection
+                st.session_state.mongodb_client.server_info()
+                print("MongoDB connection successful")
+                
+            except Exception as e:
+                print(f"Error connecting to MongoDB: {e}")
+                raise Exception("Failed to connect to MongoDB")
+        
+        self.client = st.session_state.mongodb_client
+        self.db = self.client.food_ai_db
+        self.users = self.db.users
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.client.close()
+        # Don't close the connection here anymore since we're reusing it
+        pass
 
     def save_analysis(self, email, image_data, ingredients, final_nutrition_info, text_summary):
         """Save food analysis with image, ingredients, nutrition info, and summary"""

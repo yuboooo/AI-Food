@@ -76,23 +76,26 @@ def download_s3_bucket(bucket_name, local_dir):
                 print(f"Downloading {key} to {local_file_path}")
                 s3.download_file(bucket_name, key, local_file_path)
 
-# Function to load Chroma database
-def get_db_json():
-    # Define S3 and local paths
-    bucket_name = "food-ai-db" 
-    local_dir = "../data/food_db_cloud/" 
+def initialize_db():
+    """Initialize database connection if not already in session state"""
+    if 'vector_db' not in st.session_state:
+        with st.spinner("Loading database..."):
+            # Define S3 and local paths
+            bucket_name = "food-ai-db" 
+            local_dir = "../data/food_db_cloud/" 
 
-    # Call the function
-    download_s3_bucket(bucket_name, local_dir)
+            # Call the function
+            download_s3_bucket(bucket_name, local_dir)
 
-    db_path = os.path.join(local_dir, "vector_db_json")
+            db_path = os.path.join(local_dir, "vector_db_json")
 
-    # Load the Chroma database
-    return Chroma(
-        collection_name="food_items_collection",
-        embedding_function=OpenAIEmbeddings(model="text-embedding-3-large", api_key=st.secrets["general"]["OPENAI_API_KEY"]),
-        persist_directory=db_path
-    )
+            # Load the Chroma database
+            st.session_state.vector_db = Chroma(
+                collection_name="food_items_collection",
+                embedding_function=OpenAIEmbeddings(model="text-embedding-3-large", api_key=st.secrets["general"]["OPENAI_API_KEY"]),
+                persist_directory=db_path
+            )
+    return st.session_state.vector_db
 
 def save_analysis_to_db(email, image_data, ingredients, nutrition_info, nutrition_df, augmented_info):
     """
@@ -163,8 +166,7 @@ if __name__ == "__main__":
 
         with st.spinner("Fetching nutrition information for ingredients..."):
             # Get the database
-            db = get_db_json()
-
+            db = initialize_db()
 
             # Retrieve nutrition info for each ingredient
             nutrition_info = {}
