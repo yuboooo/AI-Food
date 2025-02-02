@@ -51,13 +51,7 @@ try:
     else:
         st.warning("Authentication failed. Please check your credentials.")
         st.warning("Sorry, we are still debuging the deployment issues, try again later~ thank you for your understanding!")
-        st.info("Make sure you have:")
-        st.markdown("""
-        1. Valid Google Cloud credentials
-        2. Correct redirect URI in Google Cloud Console
-        3. Enabled Google OAuth2 API
-        4. Configured OAuth consent screen
-        """)
+        
 
 except FileNotFoundError as e:
     st.error(f"Credentials file error: {str(e)}")
