@@ -128,6 +128,17 @@ def save_analysis_to_db(email, image_data, ingredients, nutrition_info, nutritio
         st.error(f"Error saving to database: {str(e)}")
         return False, str(e)
 
+@st.cache_data
+def get_source_information():
+    return """
+    The nutritional facts displayed above are sourced from the **USDA SRLegacy Database**. 
+    Our system identifies the most similar food descriptions in the database based on the ingredients we identified. 
+    While we strive to make the matches as accurate as possible, they might not always perfectly reflect the exact nutrition of your specific ingredient.
+    We are working to improve our data and algorithms in future versions.
+
+    Below are the matched descriptions from the USDA SRLegacy Database for your reference:
+    """
+
 if __name__ == "__main__":
 
     # Streamlit app
@@ -143,35 +154,62 @@ if __name__ == "__main__":
     if uploaded_file is None:
         st.info("Please upload a JPG, PNG, or JPEG image of your food to get started!")
     else:
-        image = Image.open(uploaded_file)
-        upload_image(uploaded_file)
-        st.image(image, caption="Uploaded Food Image", use_container_width=True)
+        # Clear session state if a new image is uploaded
+        current_file_name = getattr(uploaded_file, 'name', None)
+        if 'last_uploaded_file' not in st.session_state or st.session_state.last_uploaded_file != current_file_name:
+            if 'current_analysis' in st.session_state:
+                del st.session_state.current_analysis
+            st.session_state.last_uploaded_file = current_file_name
 
-        # Encode image and extract ingredients
-        with st.spinner("Processing image to extract food ingredients..."):
-            encoded_image = encode_image(uploaded_file)
-            ingredients = agent1_food_image_caption(encoded_image)
+        # Initialize analysis if not already done
+        if 'current_analysis' not in st.session_state:
+            st.session_state.current_analysis = {}
+            
+            image = Image.open(uploaded_file)
+            upload_image(uploaded_file)
+            st.image(image, caption="Uploaded Food Image", use_container_width=True)
 
-        if ingredients[0] == 'False':
-            st.error("Sorry, we couldn't identify the food in the image. Please try again with a clearer image.")
-            st.stop()
+            # Encode image and extract ingredients
+            with st.spinner("Processing image to extract food ingredients..."):
+                encoded_image = encode_image(uploaded_file)
+                ingredients = agent1_food_image_caption(encoded_image)
 
+            if ingredients[0] == 'False':
+                st.error("Sorry, we couldn't identify the food in the image. Please try again with a clearer image.")
+                st.stop()
+
+            # Store all analysis results in session state
+            st.session_state.current_analysis = {
+                'ingredients': ingredients,
+                'encoded_image': encoded_image,
+                'uploaded_file': uploaded_file
+            }
+
+        # Now we can safely access the ingredients
+        ingredients = st.session_state.current_analysis['ingredients']
+        
         st.subheader("🍴 Extracted Food Ingredients")
         st.write(ingredients)
 
+        # Continue with nutrition info processing using stored ingredients
         with st.spinner("Fetching nutrition information for ingredients..."):
-            # Get the database
-            db = initialize_db()
+            if 'nutrition_info' not in st.session_state.current_analysis:
+                db = initialize_db()
+                nutrition_info = {}
+                display_info = {}
+                for ingredient in ingredients:
+                    similar_doc = db.similarity_search(ingredient, k=1)
+                    food_description = similar_doc[0].page_content if similar_doc else None
+                    metadata = similar_doc[0].metadata
+                    display_info[ingredient] = metadata
+                    nutrition_info[food_description] = metadata
+                
+                st.session_state.current_analysis['nutrition_info'] = nutrition_info
+                st.session_state.current_analysis['display_info'] = display_info
 
-            # Retrieve nutrition info for each ingredient
-            nutrition_info = {}
-            display_info = {}
-            for ingredient in ingredients:
-                similar_doc = db.similarity_search(ingredient, k=1)
-                food_description = similar_doc[0].page_content if similar_doc else None
-                metadata = similar_doc[0].metadata
-                display_info[ingredient] = metadata
-                nutrition_info[food_description] = metadata  # Use ingredient as the key
+        # Use stored nutrition info for display
+        display_info = st.session_state.current_analysis['display_info']
+        nutrition_info = st.session_state.current_analysis['nutrition_info']
 
         # Prepare a cleaner table
         st.subheader("🍽️ Nutrition Facts for Each Ingredient (per 100g)")
@@ -204,72 +242,55 @@ if __name__ == "__main__":
         combining data and analysis to provide you with a richer understanding of your food choices.
         """)
 
-        # Generate augmented nutrition information
-        with st.spinner("Generating augmented nutrition information..."):
-            nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info, ingredients)
+        # Generate augmented nutrition information only if not already generated
+        if 'nutrition_augmentation' not in st.session_state.current_analysis:
+            with st.spinner("Generating augmented nutrition information..."):
+                nutrition_augmentation = agent2_nutrition_augmentation(
+                    st.session_state.current_analysis['encoded_image'], 
+                    nutrition_info, 
+                    ingredients
+                )
+                st.session_state.current_analysis['nutrition_augmentation'] = nutrition_augmentation
 
-        # Display the augmented information with better formatting
-        st.markdown(f"""{nutrition_augmentation}""")
+        # Display the stored augmented information
+        st.markdown(f"""{st.session_state.current_analysis['nutrition_augmentation']}""")
 
 
 
 
-        # Add explanation and citation
+        # Add explanation and citation only if not already in session state
         st.subheader("📚 Source Information")
-        st.markdown("""
-        The nutritional facts displayed above are sourced from the **USDA SRLegacy Database**. 
-        Our system identifies the most similar food descriptions in the database based on the ingredients we identified. 
-        While we strive to make the matches as accurate as possible, they might not always perfectly reflect the exact nutrition of your specific ingredient.
-        We are working to improve our data and algorithms in future versions.
-
-        Below are the matched descriptions from the USDA SRLegacy Database for your reference:
-        """)
-
-        # Display matched descriptions and source citation
+        st.markdown(get_source_information())
 
         with st.expander("View USDA Food Central Data Sources"):
-            for ingredient, description in nutrition_info.items():
+            if 'matched_descriptions' not in st.session_state.current_analysis:
+                st.session_state.current_analysis['matched_descriptions'] = nutrition_info
+            
+            for ingredient, description in st.session_state.current_analysis['matched_descriptions'].items():
                 st.write(f"- **{ingredient}**:  {description}.")
 
+        # Save Analysis section
         if st.session_state.get('connected', False):
             email = st.session_state['user_info'].get('email')
             
             # Add a save button
             if st.button("Save Analysis"):
                 try:
-                    # Convert uploaded image to bytes for storage
+                    # Use stored file for saving
+                    uploaded_file = st.session_state.current_analysis['uploaded_file']
                     uploaded_file.seek(0)
                     image_data = uploaded_file.read()
                     
-                    # Sample data structure for testing
-                    sample_ingredients = [
-                        "chicken breast",
-                        "brown rice",
-                        "broccoli"
-                    ]
-                    
-                    sample_nutrition_info = {
-                        "calories": "450 kcal",
-                        "protein": "35g",
-                        "carbs": "45g",
-                        "fat": "15g"
-                    }
-
+                    nutrition_augmentation = st.session_state.current_analysis['nutrition_augmentation']
                     final_nutrition_info = agent3_parse_nutrition(nutrition_augmentation)
                     text_summary = agent4_create_summary(nutrition_augmentation)
-                    
-                    sample_text_summary = """
-                    This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
-                    The chicken breast provides essential protein, the brown rice offers sustained energy,
-                    and the broccoli adds important vitamins and fiber to the meal.
-                    """
                     
                     # Create MongoDB instance and save
                     mongo = MongoDB()
                     mongo.save_analysis(
                         email=email,
                         image_data=image_data,
-                        ingredients=ingredients,
+                        ingredients=st.session_state.current_analysis['ingredients'],
                         final_nutrition_info=final_nutrition_info,
                         text_summary=text_summary
                     )
