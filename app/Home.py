@@ -22,6 +22,13 @@ from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
 
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
+import os.path
+
+
 from user import show_user_profile
 
 
@@ -35,7 +42,7 @@ authenticator = Authenticate(
 
 
 # Display user profile in sidebar
-show_user_profile(authenticator)
+
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
@@ -138,10 +145,55 @@ def get_source_information():
     Below are the matched descriptions from the USDA SRLegacy Database for your reference:
     """
 
-if __name__ == "__main__":
+# Define the OAuth 2.0 scopes
+SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 
+          'https://www.googleapis.com/auth/userinfo.email']
 
-    # Streamlit app
-    st.title("🍎 Food AI")
+def google_auth():
+    """Handle Google Authentication"""
+    creds = None
+    # Check if token.pickle exists
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    
+    # If credentials are not valid or don't exist, let user login
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'google_credentials.json', 
+                SCOPES,
+                redirect_uri='https://food-ai.streamlit.app/'  # Updated to your deployed URL
+            )
+            creds = flow.run_local_server(
+                prompt='consent'
+            )
+        
+        # Save the credentials for future use
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    
+    return creds
+
+# Initialize authentication state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    if st.button('Login with Google'):
+        try:
+            creds = google_auth()
+            st.session_state.authenticated = True
+            st.session_state.credentials = creds
+            st.success('Successfully logged in!')
+        except Exception as e:
+            st.error(f'Authentication failed: {str(e)}')
+
+if __name__ == "__main__":
+    st.title("Food AI")
+    show_user_profile()
 
     # Initialize empty sidebar
     st.sidebar.empty()
