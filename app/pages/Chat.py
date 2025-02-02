@@ -1,20 +1,14 @@
 # chat.py
 import streamlit as st
-from mongodb import MongoDB  # Ensure the path is correct
-from utils.session_manager import verify_session
+from mongodb import MongoDB
+from utils.session_manager import require_auth
 
 st.title("Chat and Friend Management")
 
-# Verify session before proceeding
-if not verify_session():
-    st.error("Please log in to access this page")
-    st.stop()
+# Require authentication for this page
+require_auth()
 
-# --- Retrieve logged-in user info ---
-if "user" not in st.session_state:
-    st.error("You are not logged in! Please log in to use the chat and friend features.")
-    st.stop()
-
+# User is authenticated at this point
 user = st.session_state["user"]
 
 # --- Send Friend Request Interface ---

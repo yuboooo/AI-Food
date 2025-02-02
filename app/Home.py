@@ -21,41 +21,184 @@ import streamlit_authenticator as stauth
 from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
-from utils.session_manager import verify_session, get_authenticator
+from utils.session_manager import verify_session, get_authenticator, show_user_sidebar
 
 # Get the authenticator
 authenticator = get_authenticator()
 
-# Check for existing session first
-if not verify_session():
-    # Create the login button only if not authenticated
-    authenticator.login()
-    st.write("Please log in to continue.")
-    st.stop()
+# Check authentication but don't require it
+verify_session()
 
-# User is authenticated
-st.image(st.session_state['user_info'].get('picture'))
-st.write('Hello, ' + st.session_state['user_info'].get('name'))
-st.write('Your email is ' + st.session_state['user_info'].get('email'))
+# Show login/user info in sidebar
+with st.sidebar:
+    if st.session_state.get('connected'):
+        st.image(st.session_state['user_info'].get('picture'))
+        st.write('Hello, ' + st.session_state['user_info'].get('name'))
+        st.write('Your email is ' + st.session_state['user_info'].get('email'))
+        
+        if st.button('Log out'):
+            # Clear session in database
+            with MongoDB() as mongo:
+                mongo.invalidate_session(st.session_state['user_info'].get('email'))
+            # Clear URL parameters
+            st.query_params.clear()
+            # Clear session state
+            for key in ['connected', 'user_info', 'user']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            authenticator.logout()
+            st.experimental_rerun()
+    else:
+        authenticator.login()
+        st.write("Login to save your analysis!")
 
-# Save user info and create/update session
-with MongoDB() as mongo:
-    user_data = mongo.create_or_get_user(st.session_state['user_info'])
-    # Set session token in URL parameters
-    st.query_params['session_token'] = user_data['session_token']
+# Main content starts here
+st.title("🍎 Food AI")
 
-if st.button('Log out'):
-    # Clear session in database
-    with MongoDB() as mongo:
-        mongo.invalidate_session(st.session_state['user_info'].get('email'))
-    # Clear URL parameters
-    st.query_params.clear()
-    # Clear session state
-    for key in ['connected', 'user_info', 'user']:
-        if key in st.session_state:
-            del st.session_state[key]
-    authenticator.logout()
-    st.experimental_rerun()
+# Initialize empty sidebar
+st.sidebar.empty()
+
+st.markdown("Analyze your food and get detailed nutritional insights! 🎉")
+st.header("📸 Upload a Food Image")
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+
+if uploaded_file is None:
+    st.info("Please upload a JPG, PNG, or JPEG image of your food to get started!")
+else:
+    image = Image.open(uploaded_file)
+    upload_image(uploaded_file)
+    st.image(image, caption="Uploaded Food Image", use_container_width=True)
+
+    # Encode image and extract ingredients
+    with st.spinner("Processing image to extract food ingredients..."):
+        encoded_image = encode_image(uploaded_file)
+        ingredients = agent1_food_image_caption(encoded_image)
+
+    if ingredients[0] == 'False':
+        st.error("Sorry, we couldn't identify the food in the image. Please try again with a clearer image.")
+        st.stop()
+
+    st.subheader("🍴 Extracted Food Ingredients")
+    st.write(ingredients)
+
+    with st.spinner("Fetching nutrition information for ingredients..."):
+        # Get the database
+        db = initialize_db()
+
+        # Retrieve nutrition info for each ingredient
+        nutrition_info = {}
+        display_info = {}
+        for ingredient in ingredients:
+            similar_doc = db.similarity_search(ingredient, k=1)
+            food_description = similar_doc[0].page_content if similar_doc else None
+            metadata = similar_doc[0].metadata
+            display_info[ingredient] = metadata
+            nutrition_info[food_description] = metadata  # Use ingredient as the key
+
+    # Prepare a cleaner table
+    st.subheader("🍽️ Nutrition Facts for Each Ingredient (per 100g)")
+
+    # Convert nutrition info to a DataFrame for better display
+    nutrition_df = pd.DataFrame.from_dict(display_info, orient='index').reset_index()
+    nutrition_df.columns = ["Ingredient", "Carbohydrate (g)", "Energy (kcal)", "Protein (g)", "Fat (g)"]
+
+    # Customize the DataFrame for a better display
+    nutrition_df["Carbohydrate (g)"] = nutrition_df["Carbohydrate (g)"].apply(lambda x: x.split()[0])
+    nutrition_df["Protein (g)"] = nutrition_df["Protein (g)"].apply(lambda x: x.split()[0])
+    nutrition_df["Fat (g)"] = nutrition_df["Fat (g)"].apply(lambda x: x.split()[0])
+    nutrition_df["Energy (kcal)"] = nutrition_df["Energy (kcal)"].apply(lambda x: x.split()[0])
+
+    # Display as a pretty table in Streamlit
+    st.table(nutrition_df)
+
+
+    # # Augmented nutrition data
+    # st.write("Generating augmented nutrition information...")
+    # nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info)
+    # st.subheader("Augmented Nutrition Information")
+    # st.write(nutrition_augmentation)
+
+
+    # Augmented Nutrition Data
+    st.subheader("🌟 Augmented Nutrition Information")
+    st.markdown("""
+    Here, we enhance the basic nutrition facts with additional insights, 
+    combining data and analysis to provide you with a richer understanding of your food choices.
+    """)
+
+    # Generate augmented nutrition information
+    with st.spinner("Generating augmented nutrition information..."):
+        nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info, ingredients)
+
+    # Display the augmented information with better formatting
+    st.markdown(f"""{nutrition_augmentation}""")
+
+
+
+
+    # Add explanation and citation
+    st.subheader("📚 Source Information")
+    st.markdown("""
+    The nutritional facts displayed above are sourced from the **USDA SRLegacy Database**. 
+    Our system identifies the most similar food descriptions in the database based on the ingredients we identified. 
+    While we strive to make the matches as accurate as possible, they might not always perfectly reflect the exact nutrition of your specific ingredient.
+    We are working to improve our data and algorithms in future versions.
+
+    Below are the matched descriptions from the USDA SRLegacy Database for your reference:
+    """)
+
+    # Display matched descriptions and source citation
+
+    with st.expander("View USDA Food Central Data Sources"):
+        for ingredient, description in nutrition_info.items():
+            st.write(f"- **{ingredient}**:  {description}.")
+
+    if st.session_state.get('connected', False):
+        email = st.session_state['user_info'].get('email')
+        
+        # Add a save button
+        if st.button("Save Analysis"):
+            try:
+                # Convert uploaded image to bytes for storage
+                uploaded_file.seek(0)
+                image_data = uploaded_file.read()
+                
+                # Sample data structure for testing
+                sample_ingredients = [
+                    "chicken breast",
+                    "brown rice",
+                    "broccoli"
+                ]
+                
+                sample_nutrition_info = {
+                    "calories": "450 kcal",
+                    "protein": "35g",
+                    "carbs": "45g",
+                    "fat": "15g"
+                }
+                
+                sample_text_summary = """
+                This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
+                The chicken breast provides essential protein, the brown rice offers sustained energy,
+                and the broccoli adds important vitamins and fiber to the meal.
+                """
+                
+                # Create MongoDB instance and save
+                mongo = MongoDB()
+                mongo.save_analysis(
+                    email=email,
+                    image_data=image_data,
+                    ingredients=sample_ingredients,
+                    final_nutrition_info=sample_nutrition_info,
+                    text_summary=sample_text_summary
+                )
+                
+                st.success("Analysis saved successfully!")
+                
+            except Exception as e:
+                st.error(f"Error saving to database: {str(e)}")
+    else:
+        st.warning("Please log in to save your analysis.")
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
@@ -146,153 +289,3 @@ def save_analysis_to_db(email, image_data, ingredients, nutrition_info, nutritio
     except Exception as e:
         st.error(f"Error saving to database: {str(e)}")
         return False, str(e)
-
-if __name__ == "__main__":
-
-    # Streamlit app
-    st.title("🍎 Food AI")
-
-    # Initialize empty sidebar
-    st.sidebar.empty()
-
-    st.markdown("Analyze your food and get detailed nutritional insights! 🎉")
-    st.header("📸 Upload a Food Image")
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
-
-    if uploaded_file is None:
-        st.info("Please upload a JPG, PNG, or JPEG image of your food to get started!")
-    else:
-        image = Image.open(uploaded_file)
-        upload_image(uploaded_file)
-        st.image(image, caption="Uploaded Food Image", use_container_width=True)
-
-        # Encode image and extract ingredients
-        with st.spinner("Processing image to extract food ingredients..."):
-            encoded_image = encode_image(uploaded_file)
-            ingredients = agent1_food_image_caption(encoded_image)
-
-        if ingredients[0] == 'False':
-            st.error("Sorry, we couldn't identify the food in the image. Please try again with a clearer image.")
-            st.stop()
-
-        st.subheader("🍴 Extracted Food Ingredients")
-        st.write(ingredients)
-
-        with st.spinner("Fetching nutrition information for ingredients..."):
-            # Get the database
-            db = initialize_db()
-
-            # Retrieve nutrition info for each ingredient
-            nutrition_info = {}
-            display_info = {}
-            for ingredient in ingredients:
-                similar_doc = db.similarity_search(ingredient, k=1)
-                food_description = similar_doc[0].page_content if similar_doc else None
-                metadata = similar_doc[0].metadata
-                display_info[ingredient] = metadata
-                nutrition_info[food_description] = metadata  # Use ingredient as the key
-
-        # Prepare a cleaner table
-        st.subheader("🍽️ Nutrition Facts for Each Ingredient (per 100g)")
-
-        # Convert nutrition info to a DataFrame for better display
-        nutrition_df = pd.DataFrame.from_dict(display_info, orient='index').reset_index()
-        nutrition_df.columns = ["Ingredient", "Carbohydrate (g)", "Energy (kcal)", "Protein (g)", "Fat (g)"]
-
-        # Customize the DataFrame for a better display
-        nutrition_df["Carbohydrate (g)"] = nutrition_df["Carbohydrate (g)"].apply(lambda x: x.split()[0])
-        nutrition_df["Protein (g)"] = nutrition_df["Protein (g)"].apply(lambda x: x.split()[0])
-        nutrition_df["Fat (g)"] = nutrition_df["Fat (g)"].apply(lambda x: x.split()[0])
-        nutrition_df["Energy (kcal)"] = nutrition_df["Energy (kcal)"].apply(lambda x: x.split()[0])
-
-        # Display as a pretty table in Streamlit
-        st.table(nutrition_df)
-
-
-        # # Augmented nutrition data
-        # st.write("Generating augmented nutrition information...")
-        # nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info)
-        # st.subheader("Augmented Nutrition Information")
-        # st.write(nutrition_augmentation)
-
-
-        # Augmented Nutrition Data
-        st.subheader("🌟 Augmented Nutrition Information")
-        st.markdown("""
-        Here, we enhance the basic nutrition facts with additional insights, 
-        combining data and analysis to provide you with a richer understanding of your food choices.
-        """)
-
-        # Generate augmented nutrition information
-        with st.spinner("Generating augmented nutrition information..."):
-            nutrition_augmentation = agent2_nutrition_augmentation(encoded_image, nutrition_info, ingredients)
-
-        # Display the augmented information with better formatting
-        st.markdown(f"""{nutrition_augmentation}""")
-
-
-
-
-        # Add explanation and citation
-        st.subheader("📚 Source Information")
-        st.markdown("""
-        The nutritional facts displayed above are sourced from the **USDA SRLegacy Database**. 
-        Our system identifies the most similar food descriptions in the database based on the ingredients we identified. 
-        While we strive to make the matches as accurate as possible, they might not always perfectly reflect the exact nutrition of your specific ingredient.
-        We are working to improve our data and algorithms in future versions.
-
-        Below are the matched descriptions from the USDA SRLegacy Database for your reference:
-        """)
-
-        # Display matched descriptions and source citation
-
-        with st.expander("View USDA Food Central Data Sources"):
-            for ingredient, description in nutrition_info.items():
-                st.write(f"- **{ingredient}**:  {description}.")
-
-        if st.session_state.get('connected', False):
-            email = st.session_state['user_info'].get('email')
-            
-            # Add a save button
-            if st.button("Save Analysis"):
-                try:
-                    # Convert uploaded image to bytes for storage
-                    uploaded_file.seek(0)
-                    image_data = uploaded_file.read()
-                    
-                    # Sample data structure for testing
-                    sample_ingredients = [
-                        "chicken breast",
-                        "brown rice",
-                        "broccoli"
-                    ]
-                    
-                    sample_nutrition_info = {
-                        "calories": "450 kcal",
-                        "protein": "35g",
-                        "carbs": "45g",
-                        "fat": "15g"
-                    }
-                    
-                    sample_text_summary = """
-                    This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
-                    The chicken breast provides essential protein, the brown rice offers sustained energy,
-                    and the broccoli adds important vitamins and fiber to the meal.
-                    """
-                    
-                    # Create MongoDB instance and save
-                    mongo = MongoDB()
-                    mongo.save_analysis(
-                        email=email,
-                        image_data=image_data,
-                        ingredients=sample_ingredients,
-                        final_nutrition_info=sample_nutrition_info,
-                        text_summary=sample_text_summary
-                    )
-                    
-                    st.success("Analysis saved successfully!")
-                    
-                except Exception as e:
-                    st.error(f"Error saving to database: {str(e)}")
-        else:
-            st.warning("Please log in to save your analysis.")
