@@ -30,7 +30,7 @@ authenticator = Authenticate(
     secret_credentials_path='./.streamlit/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
-    redirect_uri='http://localhost:5173',
+    redirect_uri='http://localhost:8501',
 )
 
 authenticator.check_authentification()
