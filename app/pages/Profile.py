@@ -10,6 +10,8 @@ import json
 from user import show_user_profile
 from utils.session_manager import get_authenticator
 
+
+
 authenticator = get_authenticator()
 
 def show_profile():
@@ -93,238 +95,109 @@ def show_profile():
     # Calendar Section
     st.subheader("Food History Calendar")
     
-    # Add custom CSS for calendar styling
+    # Simple calendar styling
     st.markdown("""
         <style>
-        /* Calendar container */
         .fc {
             background-color: white;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
-        /* Header styling */
-        .fc-toolbar-title {
-            color: #1f1f1f !important;
-            font-size: 1.3em !important;
-            font-weight: 600 !important;
-        }
-        
-        /* Button styling */
-        .fc-button {
-            background-color: #4CAF50 !important;
-            border-color: #4CAF50 !important;
-            color: white !important;
-            box-shadow: none !important;
-            border-radius: 5px !important;
-            padding: 6px 12px !important;
-        }
-        
-        .fc-button:hover {
-            background-color: #45a049 !important;
-            border-color: #45a049 !important;
-        }
-        
-        /* Today button */
-        .fc-today-button {
-            background-color: #2196F3 !important;
-            border-color: #2196F3 !important;
-        }
-        
-        /* Calendar cells */
-        .fc-daygrid-day {
-            transition: background-color 0.2s;
-        }
-        
-        .fc-daygrid-day:hover {
-            background-color: #f5f5f5;
-        }
-        
-        /* Today's date highlight */
-        .fc-day-today {
-            background-color: #e8f5e9 !important;
-        }
-        
-        /* Event styling */
         .fc-event {
             border-radius: 5px !important;
             padding: 2px 5px !important;
-            margin: 2px 0 !important;
-            border: none !important;
-            transition: transform 0.2s;
         }
-        
-        .fc-event:hover {
-            transform: scale(1.02);
-        }
-        
-        /* Week numbers */
-        .fc-week-number {
-            color: #666;
-            font-size: 0.9em;
-        }
-        
-        /* Header cells */
-        .fc-col-header-cell {
-            background-color: #f8f9fa;
-            padding: 10px 0 !important;
-            font-weight: 600 !important;
-        }
-        
-        /* More events popup */
-        .fc-more-popover {
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .fc-day-today {
+            background-color: #e8f5e9 !important;
         }
         </style>
     """, unsafe_allow_html=True)
-    
-    # Initialize active meal index in session state if not exists
-    if 'active_meal_index' not in st.session_state:
-        st.session_state.active_meal_index = 0
 
     try:
         mongo = MongoDB()
         user_data = mongo.users.find_one({"email": st.session_state['user_info'].get('email')})
         food_history = user_data.get('food_history', []) if user_data else []
         
-        # Create calendar events from food history
-        calendar_events = []
+        # Group meals by date
+        meals_by_date = {}
         for entry in food_history:
-            if isinstance(entry['date'], str):
-                date_str = entry['date']
-            else:
-                date_str = entry['date'].isoformat()
+            date_str = entry['date'].isoformat() if isinstance(entry['date'], datetime) else entry['date']
+            date_key = date_str.split('T')[0]
+            if date_key not in meals_by_date:
+                meals_by_date[date_key] = []
+            meals_by_date[date_key].append(entry)
+        
+        # Create individual events for each meal
+        calendar_events = []
+        for date, meals in meals_by_date.items():
+            # Sort meals by datetime
+            meals.sort(key=lambda x: x['date'] if isinstance(x['date'], datetime) else x['date'])
+            
+            # Create an event for each meal
+            for i, meal in enumerate(meals, 1):
+                meal_time = meal['date']
+                if isinstance(meal_time, datetime):
+                    start_time = meal_time.isoformat()
+                else:
+                    start_time = date
                 
-            event = {
-                'title': f"🍽️ {', '.join(entry['ingredients'][:2])}",
-                'start': date_str,
-                'end': date_str,
-                'id': date_str,
-                'allDay': True,
-                'backgroundColor': '#4CAF50',
-                'borderColor': '#4CAF50',
-                'textColor': '#ffffff',
-            }
-            calendar_events.append(event)
+                event = {
+                    'title': f"Meal {i}",
+                    'start': start_time,
+                    'id': f"{date}-meal-{i}",
+                    'backgroundColor': '#4CAF50',
+                    'borderColor': '#4CAF50',
+                    'textColor': '#ffffff',
+                }
+                calendar_events.append(event)
         
         # Calendar configuration
         calendar_options = {
             "headerToolbar": {
                 "left": "prev,next today",
                 "center": "title",
-                "right": "dayGridMonth",
+                "right": "dayGridMonth,timeGridDay",
             },
             "initialView": "dayGridMonth",
             "selectable": True,
-            "selectMirror": True,
             "dayMaxEvents": True,
-            "weekNumbers": False,
-            "navLinks": True,
             "editable": False,
             "events": calendar_events,
-            "height": 650,  # Fixed height for better appearance
-            "aspectRatio": 1.8,  # Width to height ratio
-            "firstDay": 1,  # Start week on Monday
-            "eventTimeFormat": {
-                "hour": "2-digit",
-                "minute": "2-digit",
-                "meridiem": False
-            },
+            "height": 650,
         }
         
         # Display calendar
         calendar_state = calendar(events=calendar_events, options=calendar_options)
         
-        # Show food details when a date is selected
+        # Show food details when a meal is selected
         if calendar_state and 'eventClick' in calendar_state:
-            selected_event = calendar_state['eventClick']
-            selected_date = selected_event['event']['start']
+            event_id = calendar_state['eventClick']['event']['id']
+            date = event_id.split('-meal-')[0]
+            meal_index = int(event_id.split('-meal-')[1]) - 1
             
-            # Find all food entries for the selected date
-            selected_entries = [
-                entry for entry in food_history 
-                if (isinstance(entry['date'], str) and entry['date'].startswith(selected_date)) or
-                   (hasattr(entry['date'], 'isoformat') and entry['date'].isoformat().startswith(selected_date))
-            ]
-            
-            if selected_entries:
-                st.markdown(f"### 🗓️ Meals for {selected_date.split('T')[0]}")
+            selected_meals = meals_by_date.get(date, [])
+            if selected_meals and meal_index < len(selected_meals):
+                selected_meal = selected_meals[meal_index]
+                # Add the date as a main title
+                meal_date = datetime.fromisoformat(date) if isinstance(date, str) else date
+                st.markdown(f"# 📅 {meal_date.strftime('%B %d, %Y')}")
                 
-                # Display first entry's nutrition summary
-                first_entry = selected_entries[0]
-                display_nutrition_summary(first_entry)
+                # Create dropdown for meal selection
+                meal_options = [f"Meal {i+1}" for i in range(len(selected_meals))]
+                selected_meal_index = st.selectbox(
+                    "Select meal to view details",
+                    range(len(meal_options)),
+                    format_func=lambda x: meal_options[x],
+                    index=meal_index
+                )
                 
-                # Display all entries in expandable sections
-                for i, entry in enumerate(selected_entries):
-                    # Create a unique key for each expander
-                    expander_key = f"meal_{i}_{selected_date}"
-                    
-                    # When an expander is clicked, update the active meal index
-                    with st.expander(
-                        f"🍽️ Meal {i+1}: {', '.join(entry['ingredients'][:2])}...",
-                        expanded=(i == st.session_state.active_meal_index)
-                    ) as exp:
-                        display_meal_details(entry)
-                        # If this expander is clicked (expanded), update active_meal_index
-                        if exp:
-                            st.session_state.active_meal_index = i
-                        elif i == st.session_state.active_meal_index and not exp:
-                            st.session_state.active_meal_index = None
-
-                # Update nutrition summary to show active meal
-                if st.session_state.active_meal_index is not None:
-                    active_entry = selected_entries[st.session_state.active_meal_index]
-                    display_nutrition_summary(active_entry)
+                # Display details for the selected meal
+                selected_meal = selected_meals[selected_meal_index]
+                st.markdown(f"### 🍽️ {meal_options[selected_meal_index]} Details")
+                display_meal_details(selected_meal)
 
     except Exception as e:
         st.error(f"Error loading food history: {str(e)}")
-
-def display_nutrition_summary(entry):
-    """Display a summary card of nutrition information"""
-    st.markdown("""
-        <style>
-        .nutrition-card {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            background-color: #f0f2f6;
-            margin-bottom: 1rem;
-        }
-        .nutrition-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-top: 0.5rem;
-        }
-        .nutrition-item {
-            text-align: center;
-            padding: 0.5rem;
-            background-color: white;
-            border-radius: 0.3rem;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    nutrition_info = entry['final_nutrition_info']
-    
-    # Create a clean nutrition summary
-    st.markdown('<div class="nutrition-card">', unsafe_allow_html=True)
-    st.markdown("#### 📊 Quick Nutrition Summary")
-    
-    # Display key nutrition metrics in a grid
-    cols = st.columns(4)
-    metrics = [
-        ("Calories", nutrition_info.get('calories', 'N/A'), "🔥"),
-        ("Protein", nutrition_info.get('protein', 'N/A'), "🥩"),
-        ("Carbs", nutrition_info.get('carbs', 'N/A'), "🌾"),
-        ("Fat", nutrition_info.get('fat', 'N/A'), "🥑")
-    ]
-    
-    for col, (label, value, emoji) in zip(cols, metrics):
-        col.metric(f"{emoji} {label}", value)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
 def display_meal_details(entry):
     """Helper function to display detailed meal information"""
@@ -340,8 +213,41 @@ def display_meal_details(entry):
     
     with col2:
         st.markdown("##### 📊 Detailed Nutrition")
-        for key, value in entry['final_nutrition_info'].items():
-            st.markdown(f"**{key}:** {value}")
+        nutrition_info = entry.get('final_nutrition_info', [])
+        
+        # Define nutrient display names and units
+        nutrient_display = {
+            "energy": ("Calories", "kcal"),
+            "protein": ("Protein", "g"),
+            "carbs": ("Carbohydrates", "g"),
+            "fat": ("Fat", "g")
+        }
+        
+        # Check if nutrition_info is a list
+        if isinstance(nutrition_info, list):
+            # Display each nutrient's range
+            for item in nutrition_info:
+                if isinstance(item, dict):  # Verify item is a dictionary
+                    nutrient = item.get('nutrient', '')
+                    if nutrient in nutrient_display:
+                        display_name, unit = nutrient_display[nutrient]
+                        min_val = float(str(item.get('min', 0)).replace(',', ''))
+                        max_val = float(str(item.get('max', 0)).replace(',', ''))
+                        st.markdown(
+                            f"**{display_name}:** {min_val:.1f} - {max_val:.1f} {unit}"
+                        )
+        elif isinstance(nutrition_info, dict):
+            # Handle case where nutrition_info is a dictionary
+            for nutrient, value in nutrition_info.items():
+                if nutrient in nutrient_display:
+                    display_name, unit = nutrient_display[nutrient]
+                    try:
+                        # Convert value to float, handling string values
+                        value = float(str(value).replace(',', ''))
+                        st.markdown(f"**{display_name}:** {value:.1f} {unit}")
+                    except (ValueError, TypeError):
+                        # If conversion fails, display the raw value
+                        st.markdown(f"**{display_name}:** {value} {unit}")
         
         # Add time information if available
         if isinstance(entry['date'], datetime):

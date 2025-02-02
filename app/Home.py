@@ -4,7 +4,7 @@
 # sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 from preprocess import encode_image
-from agents import agent1_food_image_caption, agent2_nutrition_augmentation
+from agents import agent1_food_image_caption, agent2_nutrition_augmentation, agent3_parse_nutrition
 import chromadb
 import chromadb.config
 from langchain_chroma import Chroma
@@ -254,6 +254,8 @@ if __name__ == "__main__":
                         "carbs": "45g",
                         "fat": "15g"
                     }
+
+                    final_nutrition_info = agent3_parse_nutrition(nutrition_augmentation)
                     
                     sample_text_summary = """
                     This meal is a balanced combination of lean protein, complex carbohydrates, and vegetables.
@@ -266,8 +268,8 @@ if __name__ == "__main__":
                     mongo.save_analysis(
                         email=email,
                         image_data=image_data,
-                        ingredients=sample_ingredients,
-                        final_nutrition_info=sample_nutrition_info,
+                        ingredients=ingredients,
+                        final_nutrition_info=final_nutrition_info,
                         text_summary=sample_text_summary
                     )
                     

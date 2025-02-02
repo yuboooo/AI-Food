@@ -168,3 +168,48 @@ def agent2_nutrition_augmentation(encoded_image: str, nutrition_info: dict, ingr
         return augmented_nutrition_info
     except Exception as e:
         raise Exception(f"Error during API call: {str(e)}")
+
+def agent3_parse_nutrition(agent2_response: str) -> list:
+    """
+    Parse the nutrition summary table from agent2's response and return it as a structured list.
+    The function looks for the Summary section and extracts the numerical ranges.
+    Returns a list format that's MongoDB-friendly.
+    """
+    client = OpenAI(api_key=api_key)
+    
+    prompt = """
+    Find the Summary section in the text that contains the nutrition table.
+    Extract ONLY the numerical ranges for Energy, Protein, Fat, and Carbohydrates.
+    Format the output as a list of dictionaries with this exact structure:
+    [
+        {"nutrient": "energy", "min": X, "max": Y},
+        {"nutrient": "protein", "min": X, "max": Y},
+        {"nutrient": "fat", "min": X, "max": Y},
+        {"nutrient": "carbs", "min": X, "max": Y}
+    ]
+    Where X and Y are numerical values (floats) without units.
+    Example input table row: "Energy (kcal) 785 - 925"
+    Should output: {"nutrient": "energy", "min": 785.0, "max": 925.0}
+    
+    Return only the list of dictionaries, nothing else.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{prompt}\n\nText to parse:\n{agent2_response}"
+                }
+            ],
+            max_tokens=300
+        )
+        
+        # Convert the string representation to a Python list
+        import json
+        nutrition_list = json.loads(response.choices[0].message.content.strip())
+        return nutrition_list
+        
+    except Exception as e:
+        raise Exception(f"Error parsing nutrition information: {str(e)}")
