@@ -27,6 +27,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import pickle
 import os.path
+import json
 
 
 from user import show_user_profile
@@ -152,28 +153,40 @@ SCOPES = ['https://www.googleapis.com/auth/userinfo.profile',
 def google_auth():
     """Handle Google Authentication"""
     creds = None
-    # Check if token.pickle exists
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
+    
+    # Get credentials from Streamlit secrets and ensure it's a regular dict
+    credentials_dict = {
+        "web": {
+            "client_id": st.secrets["google_credentials"]["web"]["client_id"],
+            "project_id": st.secrets["google_credentials"]["web"]["project_id"],
+            "auth_uri": st.secrets["google_credentials"]["web"]["auth_uri"],
+            "token_uri": st.secrets["google_credentials"]["web"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["google_credentials"]["web"]["auth_provider_x509_cert_url"],
+            "client_secret": st.secrets["google_credentials"]["web"]["client_secret"],
+            "redirect_uris": st.secrets["google_credentials"]["web"]["redirect_uris"]
+        }
+    }
     
     # If credentials are not valid or don't exist, let user login
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Create a temporary credentials file
+            with open('temp_credentials.json', 'w') as f:
+                json.dump(credentials_dict, f)
+            
             flow = InstalledAppFlow.from_client_secrets_file(
-                'google_credentials.json', 
+                'temp_credentials.json',
                 SCOPES,
-                redirect_uri='https://food-ai.streamlit.app/'  # Updated to your deployed URL
+                redirect_uri='https://food-ai.streamlit.app/'
             )
             creds = flow.run_local_server(
                 prompt='consent'
             )
-        
-        # Save the credentials for future use
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+            
+            # Clean up temporary file
+            os.remove('temp_credentials.json')
     
     return creds
 
