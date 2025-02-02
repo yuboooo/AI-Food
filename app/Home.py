@@ -30,7 +30,7 @@ authenticator = Authenticate(
     secret_credentials_path='app/google_credentials.json',
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
-    redirect_uri='http://localhost:5173',
+    redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
 )
 
 authenticator.check_authentification()
