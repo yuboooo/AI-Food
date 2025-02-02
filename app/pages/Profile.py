@@ -7,10 +7,14 @@ import random
 from streamlit_calendar import calendar
 from mongodb import MongoDB
 import json
+from user import show_user_profile
+from utils.session_manager import get_authenticator
+
+authenticator = get_authenticator()
 
 def show_profile():
     st.title("Nutrition Profile Dashboard")
-    
+    show_user_profile(authenticator)
     # Assuming we have a user's nutrition history stored in a database
     # For now, let's create sample data
     @st.cache_data

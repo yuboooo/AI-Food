@@ -2,6 +2,10 @@
 import streamlit as st
 from mongodb import MongoDB
 from utils.session_manager import require_auth
+from user import show_user_profile
+from utils.session_manager import get_authenticator
+
+authenticator = get_authenticator()
 
 st.title("Chat and Friend Management")
 
@@ -10,6 +14,9 @@ require_auth()
 
 # User is authenticated at this point
 user = st.session_state["user"]
+
+# Display user profile
+show_user_profile(authenticator)
 
 # --- Send Friend Request Interface ---
 st.header("Send a Friend Request")

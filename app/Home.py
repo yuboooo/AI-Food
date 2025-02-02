@@ -22,6 +22,10 @@ from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
 
+from user import show_user_profile
+
+
+
 authenticator = Authenticate(
     secret_credentials_path='./.streamlit/google_credentials.json',
     cookie_name='my_cookie_name',
@@ -31,17 +35,8 @@ authenticator = Authenticate(
 
 authenticator.check_authentification()
 
-# Create the login button
-authenticator.login()
-
-if st.session_state['connected']:
-    st.image(st.session_state['user_info'].get('picture'))
-    st.write('Hello, '+ st.session_state['user_info'].get('name'))
-    st.write('Your email is '+ st.session_state['user_info'].get('email'))
-    if st.button('Log out'):
-        authenticator.logout()
-else:
-    st.write("Please log in to continue.")
+# Display user profile in sidebar
+show_user_profile(authenticator)
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
