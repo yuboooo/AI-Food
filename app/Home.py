@@ -33,7 +33,14 @@ authenticator = Authenticate(
     redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
 )
 
-authenticator.check_authentification()
+# Add error handling for authentication
+try:
+    auth_status = authenticator.check_authentification()
+    if not auth_status:
+        st.warning("Authentication failed. Please check your credentials.")
+except Exception as e:
+    st.error(f"Authentication error: {str(e)}")
+    st.info("Please verify your Google Cloud configuration and credentials.")
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
