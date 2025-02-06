@@ -17,11 +17,13 @@ import pandas as pd
 from preprocess import upload_image
 import streamlit as st
 import streamlit_authenticator as stauth
+import json
 
 from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
 from user import show_user_profile
+import tempfile
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
@@ -136,8 +138,12 @@ google_credentials = {
     }
 }
 
+with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+    json.dump(google_credentials, f)
+    temp_credentials_path = f.name
+
 authenticator = Authenticate(
-    secret_credentials=google_credentials,
+    secret_credentials_path=temp_credentials_path,
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
     redirect_uri=st.secrets["google"]["redirect_uri"],
