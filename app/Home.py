@@ -18,23 +18,10 @@ from preprocess import upload_image
 import streamlit as st
 import streamlit_authenticator as stauth
 
+from streamlit_google_auth import Authenticate
 from mongodb import MongoDB
 import datetime
-
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow, Flow
-from google.auth.transport.requests import Request
-import pickle
-import os.path
-import json
-
-
 from user import show_user_profile
-
-
-
-# Display user profile in sidebar
-
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
@@ -137,53 +124,23 @@ def get_source_information():
     Below are the matched descriptions from the USDA SRLegacy Database for your reference:
     """
 
-# Update the SCOPES if needed
-SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 
-          'https://www.googleapis.com/auth/userinfo.email']
+authenticator = Authenticate(
+    secret_credentials_path='./.streamlit/google_credentials.json',
+    cookie_name='my_cookie_name',
+    cookie_key='this_is_secret',
+    redirect_uri='http://localhost:8501',
+)
 
-def google_auth():
-    """Handle Google Authentication"""
-    credentials_dict = {
-        "web": {
-            "client_id": st.secrets["google_credentials"]["web"]["client_id"],
-            "project_id": st.secrets["google_credentials"]["web"]["project_id"],
-            "auth_uri": st.secrets["google_credentials"]["web"]["auth_uri"],
-            "token_uri": st.secrets["google_credentials"]["web"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["google_credentials"]["web"]["auth_provider_x509_cert_url"],
-            "client_secret": st.secrets["google_credentials"]["web"]["client_secret"],
-            "redirect_uris": ["https://food-ai.streamlit.app/_stcore/oauth2-redirect"]
-        }
-    }
-    
-    flow = Flow.from_client_config(
-        credentials_dict,
-        scopes=SCOPES,
-        redirect_uri="https://food-ai.streamlit.app/_stcore/oauth2-redirect"
-    )
-    
-    return flow
+authenticator.check_authentification()
 
-# Initialize authentication state
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    if st.button('Login with Google'):
-        try:
-            flow = google_auth()
-            st.session_state.authenticated = True
-            st.session_state.credentials = flow
-            st.success('Successfully logged in!')
-        except Exception as e:
-            st.error(f'Authentication failed: {str(e)}')
+# Display user profile in sidebar
+show_user_profile(authenticator)
 
 if __name__ == "__main__":
     st.title("Food AI")
-    show_user_profile()
 
-    # Initialize empty sidebar
-    st.sidebar.empty()
-
+        
+    # Rest of your main application code
     st.markdown("Analyze your food and get detailed nutritional insights! 🎉")
     st.header("📸 Upload a Food Image")
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
