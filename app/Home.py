@@ -137,7 +137,7 @@ google_credentials = {
 }
 
 authenticator = Authenticate(
-    secret_credentials_path=google_credentials,
+    secret_credentials=google_credentials,
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
     redirect_uri=st.secrets["google"]["redirect_uri"],
