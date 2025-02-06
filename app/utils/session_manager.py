@@ -1,21 +1,41 @@
 import streamlit as st
 from mongodb import MongoDB
 from streamlit_google_auth import Authenticate
-
-google_credentials = {
-    "web": st.secrets["google_oauth"]
-}
-
+import tempfile
+import json
+import os
 
 def get_authenticator():
     """Get or create the authenticator instance"""
     if 'authenticator' not in st.session_state:
+        google_credentials = {
+            "web": {
+                "client_id": st.secrets["google"]["client_id"],
+                "client_secret": st.secrets["google"]["client_secret"],
+                "project_id": st.secrets["google"]["project_id"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "redirect_uris": [st.secrets["google"]["redirect_uri"]],
+                "javascript_origins": "https://food-ai.streamlit.app"
+            }
+        }
+
+        # Create temporary credentials file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            json.dump(google_credentials, f)
+            temp_credentials_path = f.name
+
         st.session_state.authenticator = Authenticate(
-            secret_credentials_path=google_credentials,
+            secret_credentials_path=temp_credentials_path,
             cookie_name='my_cookie_name',
             cookie_key='this_is_secret',
-            redirect_uri='https://ai-food-pvhekwymoujjbf8ohnspkj.streamlit.app/',
+            redirect_uri=st.secrets["google"]["redirect_uri"],
         )
+        
+        # Clean up temporary file
+        os.unlink(temp_credentials_path)
+        
     return st.session_state.authenticator
 
 def verify_session():
