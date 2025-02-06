@@ -135,9 +135,7 @@ google_credentials = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "redirect_uris": [st.secrets["google"]["redirect_uri"]],
-        "javascript_origins": [
-            "https://food-ai.streamlit.app",
-            "http://localhost:8501"]
+        "javascript_origins": "https://food-ai.streamlit.app"
     }
 }
 
