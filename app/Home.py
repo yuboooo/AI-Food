@@ -124,11 +124,23 @@ def get_source_information():
     Below are the matched descriptions from the USDA SRLegacy Database for your reference:
     """
 
+google_credentials = {
+    "web": {
+        "client_id": st.secrets["google"]["client_id"],
+        "client_secret": st.secrets["google"]["client_secret"],
+        "project_id": st.secrets["google"]["project_id"],
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "redirect_uris": [st.secrets["google"]["redirect_uri"]]
+    }
+}
+
 authenticator = Authenticate(
-    secret_credentials_path='./.streamlit/google_credentials.json',
+    secret_credentials_path=google_credentials,
     cookie_name='my_cookie_name',
     cookie_key='this_is_secret',
-    redirect_uri='http://localhost:8501',
+    redirect_uri=st.secrets["google"]["redirect_uri"],
 )
 
 authenticator.check_authentification()
