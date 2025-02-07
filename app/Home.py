@@ -125,7 +125,7 @@ def get_source_information():
 
     Below are the matched descriptions from the USDA SRLegacy Database for your reference:
     """
-current_url = st.experimental_get_query_params().get("host", ["https://food-ai.streamlit.app"])[0]
+
 google_credentials = {
     "web": {
         "client_id": st.secrets["google"]["client_id"],
@@ -150,7 +150,7 @@ authenticator = Authenticate(
     redirect_uri=st.secrets["google"]["redirect_uri"],
 )
 
-st.write(current_url)
+
 
 authenticator.check_authentification()
 
