@@ -157,8 +157,8 @@ authenticator = Authenticate(
 
 authenticator.check_authentification()
 
-# Display user profile in sidebar
-show_user_profile(authenticator)
+# # Display user profile in sidebar
+# show_user_profile(authenticator)
 
 def create_oauth_flow():
     """Create and configure Google OAuth flow"""
