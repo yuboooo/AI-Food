@@ -16,7 +16,6 @@ import os
 import pandas as pd
 from preprocess import upload_image
 import streamlit as st
-import streamlit_authenticator as stauth
 import json
 
 from streamlit_google_auth import Authenticate
@@ -24,6 +23,12 @@ from mongodb import MongoDB
 import datetime
 from user import show_user_profile
 import tempfile
+
+import google.oauth2.credentials
+import google_auth_oauthlib.flow
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from pathlib import Path
 
 OPENAI_API_KEY = st.secrets["general"]["OPENAI_API_KEY"]
 # def get_db_json():
@@ -150,12 +155,79 @@ authenticator = Authenticate(
     redirect_uri=st.secrets["google"]["redirect_uri"],
 )
 
-
-
 authenticator.check_authentification()
 
 # Display user profile in sidebar
 show_user_profile(authenticator)
+
+def create_oauth_flow():
+    """Create and configure Google OAuth flow"""
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        client_config=google_credentials,
+        scopes=['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile']
+    )
+    flow.redirect_uri = google_credentials['web']['redirect_uris'][0]
+    return flow
+
+def initialize_auth():
+    """Initialize authentication state"""
+    if 'user_info' not in st.session_state:
+        if 'code' in st.query_params:
+            code = st.query_params['code']
+            flow = create_oauth_flow()
+            
+            # Exchange code for tokens
+            flow.fetch_token(code=code)
+            credentials = flow.credentials
+            
+            # Get user info from ID token
+            try:
+                id_info = id_token.verify_oauth2_token(
+                    credentials.id_token, 
+                    requests.Request(), 
+                    google_credentials['web']['client_id']
+                )
+                
+                st.session_state.user_info = {
+                    'email': id_info['email'],
+                    'name': id_info.get('name', ''),
+                    'picture': id_info.get('picture', '')
+                }
+                st.session_state.connected = True
+                
+            except ValueError as e:
+                st.error(f"Error validating token: {e}")
+                st.session_state.connected = False
+        else:
+            st.session_state.connected = False
+
+def login_button():
+    """Display login button and handle authentication flow"""
+    if not st.session_state.get('connected', False):
+        flow = create_oauth_flow()
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        
+        st.markdown(
+            f'<a href="{auth_url}" target="_self">'
+            '<button style="background-color:#4285F4; color:white; padding:8px 16px; '
+            'border:none; border-radius:4px; cursor:pointer;">Login with Google</button></a>',
+            unsafe_allow_html=True
+        )
+
+# Replace the existing authentication code with:
+initialize_auth()
+
+# Update the sidebar profile display
+if st.session_state.get('connected', False):
+    with st.sidebar:
+        st.image(st.session_state.user_info['picture'], width=100)
+        st.write(f"Welcome, {st.session_state.user_info['name']}!")
+        if st.button("Logout"):
+            st.session_state.clear()
+            st.experimental_rerun()
+else:
+    with st.sidebar:
+        login_button()
 
 if __name__ == "__main__":
     st.title("Food AI")
